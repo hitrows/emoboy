@@ -14,6 +14,13 @@ namespace
     constexpr int kFaderTravelBottom = 785; // y at min value
     constexpr int kFaderHalfWidth = 45;
 
+    // The photo is 1074x976 native - too big to fit an 1920x1080 screen
+    // comfortably alongside a DAW window. Everything (window size, fader
+    // hit-boxes) is scaled down by this factor; the background image is
+    // drawn scaled to match, so it stays one consistent picture rather
+    // than a native-res crop.
+    constexpr float kUiScale = 0.6f;
+
     struct FaderSlot { int xCenter; };
 
     // Order matches the photo left-to-right: Pitch, Formant, then the two
@@ -26,10 +33,14 @@ namespace
     constexpr FaderSlot kDriveSlot   { 650 };
     constexpr FaderSlot kMixSlot     { 858 };
 
+    // Coordinates above are in native photo-pixel space; this returns the
+    // scaled-down rect the slider actually gets, in editor-window space.
     juce::Rectangle<int> faderBounds (FaderSlot slot)
     {
-        return { slot.xCenter - kFaderHalfWidth, kFaderTravelTop,
-                 kFaderHalfWidth * 2, kFaderTravelBottom - kFaderTravelTop };
+        juce::Rectangle<int> native { slot.xCenter - kFaderHalfWidth, kFaderTravelTop,
+                                       kFaderHalfWidth * 2, kFaderTravelBottom - kFaderTravelTop };
+        return { juce::roundToInt (native.getX() * kUiScale), juce::roundToInt (native.getY() * kUiScale),
+                 juce::roundToInt (native.getWidth() * kUiScale), juce::roundToInt (native.getHeight() * kUiScale) };
     }
 
     const juce::Colour kIndicatorPink { 0xffE8579F };
@@ -65,15 +76,16 @@ EmoBoyEditor::EmoBoyEditor (EmoBoyProcessor& p)
     driveAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (proc.apvts, Param::drive, driveFader);
     mixAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (proc.apvts, Param::mix, mixFader);
 
-    setSize (background.getWidth() > 0 ? background.getWidth() : 1074,
-              background.getHeight() > 0 ? background.getHeight() : 976);
+    const int nativeW = background.getWidth() > 0 ? background.getWidth() : 1074;
+    const int nativeH = background.getHeight() > 0 ? background.getHeight() : 976;
+    setSize (juce::roundToInt (nativeW * kUiScale), juce::roundToInt (nativeH * kUiScale));
 }
 
 void EmoBoyEditor::paint (juce::Graphics& g)
 {
     g.fillAll (juce::Colours::black);
     if (background.isValid())
-        g.drawImageAt (background, 0, 0);
+        g.drawImage (background, getLocalBounds().toFloat());
 }
 
 void EmoBoyEditor::resized()
