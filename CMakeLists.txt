@@ -24,6 +24,17 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(EMOBOY_FORMATS AU Standalone)
 
 # ---------------------------------------------------------------------------
+# Mod1/Mod2/AM/PT + the 4x4 modulation routing matrix - fully implemented,
+# parked at the user's request (2026-08-19, see HANDOFF.md) for a future
+# "EmoBoy Nerd" variant. OFF means it is not merely hidden in the UI but
+# genuinely not compiled into this build's parameters, DSP, or editor - see
+# the EMOBOY_NERD_FEATURES guards in Source/Parameters.*,
+# Source/PluginProcessor.*, and Source/PluginEditor.*. Flip to ON to bring
+# it all back.
+# ---------------------------------------------------------------------------
+option(EMOBOY_NERD_FEATURES "Build Mod1/Mod2/AM/PT modulation + routing matrix" OFF)
+
+# ---------------------------------------------------------------------------
 # JUCE. Same pin as the "Not Sure" project (8.0.15) for consistency. Reuse
 # the already-cloned checkout from that project's build dir if present, to
 # avoid a second multi-hundred-MB clone.
@@ -78,7 +89,8 @@ target_compile_definitions(${PROJECT_NAME} PUBLIC
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     JUCE_VST3_CAN_REPLACE_VST2=0
-    JUCE_DISPLAY_SPLASH_SCREEN=0)
+    JUCE_DISPLAY_SPLASH_SCREEN=0
+    EMOBOY_NERD_FEATURES=$<BOOL:${EMOBOY_NERD_FEATURES}>)
 
 target_link_libraries(${PROJECT_NAME}
     PRIVATE

@@ -55,6 +55,13 @@ private:
     std::vector<std::unique_ptr<ComboRow>> combos;
     std::vector<std::unique_ptr<ToggleRow>> toggles;
     std::vector<std::unique_ptr<juce::GroupComponent>> groups;
+
+    void buildMainSection();
+
+#if EMOBOY_NERD_FEATURES
+    // Mod1/Mod2/AM/PT + the routing matrix - "EmoBoy Nerd" territory,
+    // compiled out of the plain build. See PluginProcessor.h/.cpp and
+    // Parameters.h/.cpp for the same gate; HANDOFF.md for why.
     std::vector<std::unique_ptr<juce::Label>> freeLabels;
 
     // Routing matrix widgets: [source][target].
@@ -67,9 +74,9 @@ private:
     };
     std::array<std::array<std::unique_ptr<RouteCell>, ModMatrix::numTargets>, ModMatrix::numSources> routeCells;
 
-    void buildMainSection();
     void buildModSection();
     void buildRoutingSection();
+#endif
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EmoBoyEditor)
 };

@@ -21,7 +21,11 @@ namespace Param
     static const juce::String drive        = "drive";       // 0..100 %
     static const juce::String mix          = "mix";         // 0..100 %
 
-    // Modulation sources
+#if EMOBOY_NERD_FEATURES
+    // Modulation sources - "EmoBoy Nerd" territory, compiled out of the
+    // plain build entirely (see EMOBOY_NERD_FEATURES in CMakeLists.txt).
+    // Parked at the user's request 2026-08-19, see HANDOFF.md - working,
+    // just not shipped in this build.
     static const juce::String mod1Rate     = "mod1Rate";    // Hz
     static const juce::String mod1Phase    = "mod1Phase";   // degrees
     static const juce::String mod1Level    = "mod1Level";   // 0..100 %
@@ -78,6 +82,7 @@ namespace Param
     {
         return juce::String ("route_") + sourceName (s) + "_" + targetName (t) + "_depth";
     }
+#endif
 
     enum class Mode { Transpose = 0, Quantize = 1, Robot = 2 };
 }

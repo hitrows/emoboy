@@ -43,6 +43,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
         NormalisableRange<float> (0.0f, 100.0f, 0.1f), 100.0f,
         AudioParameterFloatAttributes().withLabel ("%")));
 
+#if EMOBOY_NERD_FEATURES
     // ---- modulation sources ------------------------------------------------
     auto addLFO = [&] (const juce::String& rateId, const juce::String& phaseId, const juce::String& levelId, const juce::String& label)
     {
@@ -107,6 +108,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
                 AudioParameterFloatAttributes().withLabel ("%")));
         }
     }
+#endif // EMOBOY_NERD_FEATURES
 
     return { params.begin(), params.end() };
 }

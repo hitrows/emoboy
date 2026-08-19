@@ -32,6 +32,37 @@ deleted:
 1.0** (or spin it into the separate "EmoBoy Nerd" product, per the working
 name above) - whichever the user decides at that point.
 
+### Follow-up: actually excluded from the build, not just hidden
+
+The above (UI hidden, code still called) was the first pass. The user then
+asked specifically not to carry the unused code into the actual build
+output. Changed to a real compile-time gate:
+
+- **`option(EMOBOY_NERD_FEATURES "..." OFF)`** in `CMakeLists.txt`, passed
+  through as the `EMOBOY_NERD_FEATURES` compile definition.
+- `Source/Parameters.h/.cpp`, `Source/PluginProcessor.h/.cpp`, and
+  `Source/PluginEditor.h/.cpp` all wrap the Mod1/Mod2/AM/PT/routing-matrix
+  code in `#if EMOBOY_NERD_FEATURES` / `#endif`. With the option OFF
+  (default), none of it is compiled into the binary at all - not dead code
+  sitting unused, genuinely absent from the object files.
+- **`Source/dsp/Modulation.h`** (LFO/EnvelopeFollower/ModMatrix) is only
+  `#include`d when the flag is on.
+- To bring it back for real work: `cmake -B build -G Xcode
+  -DEMOBOY_NERD_FEATURES=ON`, rebuild. Both configurations were built and
+  `auval`-validated in this session - the gate itself isn't a guess.
+
+**One regression this caught while doing it:** the pitch detector was
+previously fed *only* from inside `updateModulationSources()` (the PT
+source needed it, so it rode along). Naively gating that whole function out
+would have silently broken Quantize/Robot mode too, since they also read
+`pitchDetector`. Split into `feedPitchDetector()` (always compiled - the
+mono downmix + `pitchDetector.pushBlock()`, called unconditionally near the
+top of `processBlock`) and the Nerd-only `updateModulationSources()` (now
+just reads the already-fed detector for PT, plus its own separate mono
+downmix for the envelope follower). Worth remembering if this pattern comes
+up again: check what a "modulation-only" function is quietly load-bearing
+for before gating the whole thing out.
+
 ## Status: done, per the brief's own Definition of Done
 
 - Builds via CMake + Xcode generator.
@@ -261,6 +292,11 @@ at partial Mix in Logic, this is where to look first.
 /opt/homebrew/bin/cmake --build build --config Release --target EmoBoy_AU --target EmoBoy_Standalone
 auval -v aufx Emob Htrw
 ```
+
+Add `-DEMOBOY_NERD_FEATURES=ON` to the first line to bring back Mod1/Mod2/
+AM/PT + the routing matrix (see "modulation parked for EmoBoy Nerd" above).
+Reconfigure (the `cmake -B build` step) is required after flipping it -
+building without reconfiguring keeps the old setting.
 
 Numeric DSP check (faster than opening Logic for iteration):
 ```sh

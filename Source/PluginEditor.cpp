@@ -58,17 +58,15 @@ EmoBoyEditor::EmoBoyEditor (EmoBoyProcessor& p)
 
     buildMainSection();
 
-    // Mod1/Mod2/AM/PT + the routing matrix are fully implemented
-    // (buildModSection()/buildRoutingSection() below, plus the DSP and
-    // parameters behind them) but hidden for this build - the user wants
-    // the plain Pitch/Formant/Link/Mode/Drive/Mix core evaluated on its
-    // own first, modulation parked for a later "EmoBoy Nerd" variant.
-    // Nothing was deleted: the APVTS parameters still exist, still save/
-    // load with the session, ModMatrix still runs in PluginProcessor (at
-    // zero effect, since no route defaults to enabled) - re-enabling this
-    // is just calling these two lines again. Revisit at the 1.0 release.
-    // buildModSection();
-    // buildRoutingSection();
+#if EMOBOY_NERD_FEATURES
+    // Mod1/Mod2/AM/PT + the routing matrix - see PluginProcessor.h/.cpp and
+    // Parameters.h/.cpp for the same EMOBOY_NERD_FEATURES gate, and
+    // HANDOFF.md for why: parked for a later "EmoBoy Nerd" variant,
+    // revisit at the 1.0 release. Nothing deleted - flip the CMake option
+    // and these two calls come back.
+    buildModSection();
+    buildRoutingSection();
+#endif
 
     content.setSize (1, 1);
     for (auto& g : groups)
@@ -119,6 +117,7 @@ void EmoBoyEditor::buildMainSection()
     groups.back()->setBounds (kMargin, 10, x + kMargin, kRowHeight + 20);
 }
 
+#if EMOBOY_NERD_FEATURES
 void EmoBoyEditor::buildModSection()
 {
     const int top = kRowHeight + 40;
@@ -245,6 +244,7 @@ void EmoBoyEditor::buildRoutingSection()
 
     content.setSize (groupWidth + kMargin * 2, top + groupHeight + kMargin);
 }
+#endif // EMOBOY_NERD_FEATURES
 
 void EmoBoyEditor::paint (juce::Graphics& g)
 {

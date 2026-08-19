@@ -4,8 +4,10 @@
 #include "Parameters.h"
 #include "dsp/PitchFormantEngine.h"
 #include "dsp/PitchDetector.h"
-#include "dsp/Modulation.h"
 #include "dsp/Drive.h"
+#if EMOBOY_NERD_FEATURES
+#include "dsp/Modulation.h"
+#endif
 
 class EmoBoyProcessor : public juce::AudioProcessor
 {
@@ -49,6 +51,7 @@ private:
     std::atomic<float>* pDrive = nullptr;
     std::atomic<float>* pMix = nullptr;
 
+#if EMOBOY_NERD_FEATURES
     std::atomic<float>* pMod1Rate = nullptr;
     std::atomic<float>* pMod1Phase = nullptr;
     std::atomic<float>* pMod1Level = nullptr;
@@ -66,12 +69,15 @@ private:
 
     std::array<std::array<std::atomic<float>*, ModMatrix::numTargets>, ModMatrix::numSources> pRouteOn {};
     std::array<std::array<std::atomic<float>*, ModMatrix::numTargets>, ModMatrix::numSources> pRouteDepth {};
+#endif
 
     PitchFormantEngine engine;
     PitchDetector pitchDetector;
+#if EMOBOY_NERD_FEATURES
     LFO lfo1, lfo2;
     EnvelopeFollower envFollower;
     ModMatrix modMatrix;
+#endif
     std::vector<Drive> driveStages; // one per channel
 
     // Dry path delay compensation, matched sample-for-sample to
@@ -80,9 +86,11 @@ private:
     int dryDelayWritePos = 0;
     int dryDelaySamples = 0;
 
+#if EMOBOY_NERD_FEATURES
     // PT modulation source smoothing state (one-pole, time constant from
     // the PT Smooth parameter).
     float ptSmoothedSemitones = 0.0f;
+#endif
 
     // Currently-held MIDI note for Robot mode, -1 if none held.
     int heldMidiNote = -1;
@@ -92,7 +100,13 @@ private:
     float currentPitchSemitones = 0.0f;   // for metering/UI if ever needed
     float currentFormantSemitones = 0.0f;
 
+    // Downmixes to mono and feeds the pitch detector - needed unconditionally
+    // for Quantize/Robot mode, not just for the (optional) PT modulation
+    // source, so this stays outside the EMOBOY_NERD_FEATURES gate.
+    void feedPitchDetector (const juce::AudioBuffer<float>& input, int numSamples);
+#if EMOBOY_NERD_FEATURES
     void updateModulationSources (const juce::AudioBuffer<float>& input, int numSamples);
+#endif
     void handleMidi (const juce::MidiBuffer& midi);
     float midiNoteToHz (int note) const { return 440.0f * std::pow (2.0f, ((float) note - 69.0f) / 12.0f); }
     float hzToSemitone (float hz) const { return hz > 1.0f ? 12.0f * std::log2 (hz / 440.0f) + 69.0f : 0.0f; }

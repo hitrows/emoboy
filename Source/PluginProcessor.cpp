@@ -3,6 +3,7 @@
 
 namespace
 {
+#if EMOBOY_NERD_FEATURES
     // Modulation depth = 100% maps to this much swing on each target.
     // Chosen so full-depth modulation is dramatic but not degenerate -
     // measured by ear against the demo brief's expectation that Mod1 on
@@ -12,6 +13,7 @@ namespace
     constexpr float kFormantModRangeSemitones = 12.0f;
     constexpr float kMixModRangePercent = 50.0f;
     constexpr float kDriveModRangePercent = 50.0f;
+#endif
 
     constexpr int kRobotNoteBase = 36; // index 0 ("C2" in the selector) = MIDI note 36
 }
@@ -30,6 +32,7 @@ EmoBoyProcessor::EmoBoyProcessor()
     pDrive = apvts.getRawParameterValue (Param::drive);
     pMix = apvts.getRawParameterValue (Param::mix);
 
+#if EMOBOY_NERD_FEATURES
     pMod1Rate = apvts.getRawParameterValue (Param::mod1Rate);
     pMod1Phase = apvts.getRawParameterValue (Param::mod1Phase);
     pMod1Level = apvts.getRawParameterValue (Param::mod1Level);
@@ -55,6 +58,7 @@ EmoBoyProcessor::EmoBoyProcessor()
             pRouteDepth[(size_t) s][(size_t) t] = apvts.getRawParameterValue (Param::routeDepthId (source, target));
         }
     }
+#endif
 }
 
 void EmoBoyProcessor::prepareToPlay (double sampleRate, int /*samplesPerBlock*/)
@@ -67,9 +71,11 @@ void EmoBoyProcessor::prepareToPlay (double sampleRate, int /*samplesPerBlock*/)
 
     pitchDetector.prepare (sampleRate, 2048);
 
+#if EMOBOY_NERD_FEATURES
     lfo1.prepare (sampleRate);
     lfo2.prepare (sampleRate);
     envFollower.prepare (sampleRate);
+#endif
 
     driveStages.assign ((size_t) numChannels, Drive {});
     for (auto& d : driveStages)
@@ -80,7 +86,9 @@ void EmoBoyProcessor::prepareToPlay (double sampleRate, int /*samplesPerBlock*/)
     dryDelayBuffer.clear();
     dryDelayWritePos = 0;
 
+#if EMOBOY_NERD_FEATURES
     ptSmoothedSemitones = 0.0f;
+#endif
     heldMidiNote = -1;
 }
 
@@ -106,6 +114,16 @@ void EmoBoyProcessor::handleMidi (const juce::MidiBuffer& midi)
     }
 }
 
+void EmoBoyProcessor::feedPitchDetector (const juce::AudioBuffer<float>& input, int numSamples)
+{
+    juce::AudioBuffer<float> mono (1, numSamples);
+    mono.clear();
+    for (int c = 0; c < input.getNumChannels(); ++c)
+        mono.addFrom (0, 0, input, c, 0, numSamples, 1.0f / (float) input.getNumChannels());
+    pitchDetector.pushBlock (mono.getReadPointer (0), numSamples);
+}
+
+#if EMOBOY_NERD_FEATURES
 void EmoBoyProcessor::updateModulationSources (const juce::AudioBuffer<float>& input, int numSamples)
 {
     const float lfo1Value = lfo1.process (numSamples, pMod1Rate->load());
@@ -117,6 +135,9 @@ void EmoBoyProcessor::updateModulationSources (const juce::AudioBuffer<float>& i
     lfo1.setPhaseOffsetDegrees (pMod1Phase->load());
     lfo2.setPhaseOffsetDegrees (pMod2Phase->load());
 
+    // Pitch detector itself is already fed by feedPitchDetector() (called
+    // unconditionally in processBlock, ahead of this) - only the mono
+    // downmix for the envelope follower is recomputed here.
     juce::AudioBuffer<float> mono (1, numSamples);
     mono.clear();
     for (int c = 0; c < input.getNumChannels(); ++c)
@@ -124,8 +145,6 @@ void EmoBoyProcessor::updateModulationSources (const juce::AudioBuffer<float>& i
 
     const float envValue = envFollower.process (mono.getReadPointer (0), numSamples,
                                                   pAmAttack->load(), pAmRelease->load());
-
-    pitchDetector.pushBlock (mono.getReadPointer (0), numSamples);
 
     float ptValue = 0.0f;
     if (pitchDetector.isVoiced())
@@ -159,6 +178,7 @@ void EmoBoyProcessor::updateModulationSources (const juce::AudioBuffer<float>& i
     modMatrix.sourceValue[2] *= pAmLevel->load() / 100.0f;
     modMatrix.sourceValue[3] *= pPtLevel->load() / 100.0f;
 }
+#endif // EMOBOY_NERD_FEATURES
 
 void EmoBoyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
@@ -167,7 +187,10 @@ void EmoBoyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     const int numChannels = buffer.getNumChannels();
 
     handleMidi (midi);
+    feedPitchDetector (buffer, numSamples);
+#if EMOBOY_NERD_FEATURES
     updateModulationSources (buffer, numSamples);
+#endif
 
     // ---- resolve Pitch / Formant target for this block -----------------
     const auto mode = (Param::Mode) (int) pMode->load();
@@ -208,8 +231,10 @@ void EmoBoyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
 
     float effectiveFormantSemitones = formantKnob + (link ? pitchKnob : 0.0f);
 
+#if EMOBOY_NERD_FEATURES
     totalPitchSemitones += modMatrix.sumFor ((int) Param::Target::Pitch) * kPitchModRangeSemitones;
     effectiveFormantSemitones += modMatrix.sumFor ((int) Param::Target::Formant) * kFormantModRangeSemitones;
+#endif
 
     totalPitchSemitones = juce::jlimit (-36.0f, 36.0f, totalPitchSemitones);
     effectiveFormantSemitones = juce::jlimit (-36.0f, 36.0f, effectiveFormantSemitones);
@@ -220,10 +245,13 @@ void EmoBoyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
     const float pitchRatio = std::pow (2.0f, totalPitchSemitones / 12.0f);
     const float formantRatio = std::pow (2.0f, effectiveFormantSemitones / 12.0f);
 
-    float mixPercent = pMix->load() + modMatrix.sumFor ((int) Param::Target::Mix) * kMixModRangePercent;
+    float mixPercent = pMix->load();
+    float drivePercent = pDrive->load();
+#if EMOBOY_NERD_FEATURES
+    mixPercent += modMatrix.sumFor ((int) Param::Target::Mix) * kMixModRangePercent;
+    drivePercent += modMatrix.sumFor ((int) Param::Target::Drive) * kDriveModRangePercent;
+#endif
     mixPercent = juce::jlimit (0.0f, 100.0f, mixPercent);
-
-    float drivePercent = pDrive->load() + modMatrix.sumFor ((int) Param::Target::Drive) * kDriveModRangePercent;
     drivePercent = juce::jlimit (0.0f, 100.0f, drivePercent);
     const float driveAmount = drivePercent / 100.0f;
 
