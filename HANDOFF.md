@@ -9,6 +9,65 @@ This was an autonomous session per the brief in
 `~/Downloads/logic-demo-brief-for-claude-code.md` — no check-ins, decisions
 made and documented here for the user to review and correct.
 
+## 2026-08-20: 0.1.1, first pedal-skin pass
+
+User supplied a hardware-pedal mockup photo (`Resources/pedalbg.png`,
+1074x976, saved from a pasted chat image at `~/Downloads/image.png`) and
+asked for a version using it as the UI, with the 4 already-working
+continuous parameters mapped onto 4 of its faders: 1st=Pitch, 2nd=Formant,
+3rd=Drive, 4th=Mix. Note the photo's own printed labels are "Pitch /
+Formant / **Mix Balance** / **Reverb**" - a placeholder-art naming
+mismatch with the user's mapping, not a design decision; went with the
+user's explicit words over the mockup's own text (position order matches
+either way - it's the 3rd and 4th fader by position that are ambiguous in
+name only). Confirmed with the user first (they invited questions before
+any design work from this point on):
+
+- **Indicator style**: a thin pink line at the current value (not a
+  filled bar) - matches the pedal photo's own baked-in pink stripe on each
+  cap.
+- **Background**: the user's actual photo, not a placeholder color -
+  "пока мы тестим только функции которые я написал на фейдерах, и в
+  интерфейсе есть только они" (only the fader-mapped functions are being
+  tested right now, nothing else belongs in the interface). So this build
+  shows **only** the 4 faders - no Link/Mode/Robot Note/Bypass controls at
+  all, even though those parameters still exist and work at their
+  defaults under the hood (Mode=Transpose, Link=off).
+
+**Implementation**: `PluginEditor` now draws the photo as a static
+background (`juce::ImageCache` from `BinaryData::pedalbg_png`) and
+overlays 4 `juce::Slider`s (`FaderOverlay`, `Source/PluginEditor.h/.cpp`)
+whose `paint()` is fully overridden to draw nothing but a 3px pink bar at
+the value position - no thumb, no track, no default LookAndFeel chrome, so
+the photo's own fader artwork shows through and only the moving pink line
+is drawn on top. Mouse drag still works normally (inherited from Slider).
+
+**Fader pixel coordinates were measured, not eyeballed**: cropped the
+photo with a pixel-labelled grid overlay (python/PIL) to find each fader's
+x-centre and the y-range of its travel, rather than guessing from the
+thumbnail. Then, since screen-recording permission wasn't available in
+this session to literally screenshot the running app, built
+`tools/preview.cpp` (`emoboy-preview` target) - an offscreen renderer that
+instantiates the real `EmoBoyEditor`, sets parameters to specific test
+values, and snapshots it to PNG via `Component::createComponentSnapshot`.
+Rendered default/extremes/mid-range and visually checked the pink line
+against the photo's own printed scale marks before calling it done:
+extremes (±12st, 0/100%) land right on the "+OCT"/"-10"/"EFFECT"/"0"·"10"
+labels; the default (0-value) position sits ~15-20px below the photo's own
+baked-in decorative stripe, which is a quirk of where that stripe happens
+to be drawn in the mockup art (not exactly at the travel's mathematical
+centre), not a bug in the calculation - the extremes prove the math is
+right. Good enough for a placeholder; will disappear once real per-state
+fader-cap art replaces the single static photo.
+
+**Not done in this pass** (all explicitly deferred to "normal design with
+layers"): no separate cap-art / track-art layers (the photo is one flat
+image), no styling for Link/Mode/Robot Note/Bypass (not shown at all),
+window size is the photo's native 1074x976 pixels 1:1 (not resized to a
+sane plugin-window size), no hover/drag visual feedback beyond the pink
+line itself, `emoboy-preview` isn't cleaned up/removed (kept as a
+reusable tool for calibrating future skin passes the same way).
+
 ## 2026-08-19 follow-up: modulation parked for "EmoBoy Nerd"
 
 After listening, the user asked to focus on the plain core (Pitch/Formant/
@@ -302,6 +361,13 @@ Numeric DSP check (faster than opening Logic for iteration):
 ```sh
 /opt/homebrew/bin/cmake --build build --config Release --target emoboy-render
 ./build/tools/emoboy-render
+```
+
+UI/fader-calibration check (renders the real editor offscreen to PNG,
+no window, no screen-recording permission needed):
+```sh
+/opt/homebrew/bin/cmake --build build --config Release --target emoboy-preview
+cd /tmp && /path/to/build/tools/emoboy-preview
 ```
 
 JUCE is fetched via the same pinned tag (8.0.15) as "Not Sure", reusing that

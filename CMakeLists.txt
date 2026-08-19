@@ -15,7 +15,7 @@ set(PLUGIN_CODE         Emob)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Minimum macOS version")
 set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "Build architectures")
 
-project(${PROJECT_NAME} VERSION 0.1.0)
+project(${PROJECT_NAME} VERSION 0.1.1)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -92,8 +92,21 @@ target_compile_definitions(${PROJECT_NAME} PUBLIC
     JUCE_DISPLAY_SPLASH_SCREEN=0
     EMOBOY_NERD_FEATURES=$<BOOL:${EMOBOY_NERD_FEATURES}>)
 
+# ---------------------------------------------------------------------------
+# Panel artwork - the user's hardware-pedal mockup photo, used as-is as the
+# editor background for this placeholder skin (0.1.1). Real layered design
+# comes later; this is just "does the geometry line up".
+# ---------------------------------------------------------------------------
+juce_add_binary_data(EmoBoyAssets
+    SOURCES
+        Resources/pedalbg.png)
+
+set_target_properties(EmoBoyAssets PROPERTIES
+    POSITION_INDEPENDENT_CODE TRUE)
+
 target_link_libraries(${PROJECT_NAME}
     PRIVATE
+        EmoBoyAssets
         juce::juce_audio_utils
         juce::juce_dsp
     PUBLIC
@@ -119,6 +132,41 @@ target_link_libraries (emoboy-render PRIVATE
     juce::juce_recommended_warning_flags)
 
 set_target_properties (emoboy-render PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY         "${CMAKE_BINARY_DIR}/tools"
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG   "${CMAKE_BINARY_DIR}/tools"
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/tools"
+    XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED NO)
+
+# ---------------------------------------------------------------------------
+# emoboy-preview
+#
+# Offscreen EmoBoyEditor -> PNG snapshot tool (tools/preview.cpp). Not part
+# of the plugin - lets the fader/indicator geometry against the pedal photo
+# be checked without screen-recording permission or opening a DAW.
+# ---------------------------------------------------------------------------
+add_executable (emoboy-preview
+    tools/preview.cpp
+    Source/PluginProcessor.cpp
+    Source/PluginEditor.cpp
+    Source/Parameters.cpp
+    Source/dsp/PitchFormantEngine.cpp)
+
+target_compile_definitions (emoboy-preview PRIVATE
+    JucePlugin_Name="EmoBoyPreview"
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0
+    JUCE_MODAL_LOOPS_PERMITTED=1
+    EMOBOY_NERD_FEATURES=$<BOOL:${EMOBOY_NERD_FEATURES}>)
+
+target_link_libraries (emoboy-preview PRIVATE
+    EmoBoyAssets
+    juce::juce_audio_utils
+    juce::juce_gui_basics
+    juce::juce_dsp
+    juce::juce_recommended_config_flags
+    juce::juce_recommended_warning_flags)
+
+set_target_properties (emoboy-preview PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY         "${CMAKE_BINARY_DIR}/tools"
     RUNTIME_OUTPUT_DIRECTORY_DEBUG   "${CMAKE_BINARY_DIR}/tools"
     RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/tools"

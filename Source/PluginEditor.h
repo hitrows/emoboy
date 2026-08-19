@@ -4,10 +4,14 @@
 #include "PluginProcessor.h"
 
 // ---------------------------------------------------------------------------
-// Plain JUCE UI - sliders/comboboxes/toggles grouped into sections, no
-// custom look-and-feel or artwork. Explicitly out of scope for this demo
-// per the brief; the point is to audition the DSP and parameter set before
-// investing in real UI/branding.
+// 0.1.1 placeholder skin: the user's hardware-pedal mockup photo as a static
+// background, with only the 4 continuous parameters actually implemented so
+// far (Pitch/Formant/Drive/Mix) made draggable over their fader positions in
+// the photo. No thumb/track artwork is drawn - just a thin pink line at the
+// current value, per the user's explicit ask ("полоска на месте бегунка").
+// Link/Mode/Robot Note are not exposed here at all; this build is only for
+// evaluating the 4 fader-mapped parameters. Real layered design (separate
+// cap/track art, the button grid, etc.) comes later - see HANDOFF.md.
 // ---------------------------------------------------------------------------
 class EmoBoyEditor : public juce::AudioProcessorEditor
 {
@@ -19,64 +23,22 @@ public:
     void resized() override;
 
 private:
-    using APVTS = juce::AudioProcessorValueTreeState;
-
-    // One labelled rotary slider bound to an APVTS parameter.
-    struct KnobRow
+    // A juce::Slider with all default LookAndFeel drawing suppressed -
+    // paint() is fully overridden, so only the thin pink indicator line
+    // this class draws itself ever appears. Mouse/keyboard interaction is
+    // unchanged, inherited from Slider as normal.
+    class FaderOverlay : public juce::Slider
     {
-        juce::Label label;
-        juce::Slider slider { juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::TextBoxBelow };
-        std::unique_ptr<APVTS::SliderAttachment> attachment;
-    };
-
-    struct ToggleRow
-    {
-        juce::ToggleButton button;
-        std::unique_ptr<APVTS::ButtonAttachment> attachment;
-    };
-
-    struct ComboRow
-    {
-        juce::Label label;
-        juce::ComboBox box;
-        std::unique_ptr<APVTS::ComboBoxAttachment> attachment;
+    public:
+        FaderOverlay();
+        void paint (juce::Graphics&) override;
     };
 
     EmoBoyProcessor& proc;
+    juce::Image background;
 
-    juce::Viewport viewport;
-    juce::Component content;
-
-    KnobRow& addKnob (const juce::String& paramId, const juce::String& labelText);
-    ComboRow& addCombo (const juce::String& paramId, const juce::String& labelText);
-    ToggleRow& addToggle (const juce::String& paramId, const juce::String& labelText);
-
-    std::vector<std::unique_ptr<KnobRow>> knobs;
-    std::vector<std::unique_ptr<ComboRow>> combos;
-    std::vector<std::unique_ptr<ToggleRow>> toggles;
-    std::vector<std::unique_ptr<juce::GroupComponent>> groups;
-
-    void buildMainSection();
-
-#if EMOBOY_NERD_FEATURES
-    // Mod1/Mod2/AM/PT + the routing matrix - "EmoBoy Nerd" territory,
-    // compiled out of the plain build. See PluginProcessor.h/.cpp and
-    // Parameters.h/.cpp for the same gate; HANDOFF.md for why.
-    std::vector<std::unique_ptr<juce::Label>> freeLabels;
-
-    // Routing matrix widgets: [source][target].
-    struct RouteCell
-    {
-        juce::ToggleButton on;
-        juce::Slider depth { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
-        std::unique_ptr<APVTS::ButtonAttachment> onAttachment;
-        std::unique_ptr<APVTS::SliderAttachment> depthAttachment;
-    };
-    std::array<std::array<std::unique_ptr<RouteCell>, ModMatrix::numTargets>, ModMatrix::numSources> routeCells;
-
-    void buildModSection();
-    void buildRoutingSection();
-#endif
+    FaderOverlay pitchFader, formantFader, driveFader, mixFader;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> pitchAttachment, formantAttachment, driveAttachment, mixAttachment;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EmoBoyEditor)
 };
