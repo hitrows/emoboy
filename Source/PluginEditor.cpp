@@ -27,6 +27,13 @@ EmoBoyEditor::ComboRow& EmoBoyEditor::addCombo (const juce::String& paramId, con
     row->label.setJustificationType (juce::Justification::centred);
     content.addAndMakeVisible (row->label);
     content.addAndMakeVisible (row->box);
+
+    // ComboBoxAttachment only keeps selection in sync - it does not
+    // populate the dropdown itself, so without this the box shows
+    // "(no choices)" forever even though the parameter has them.
+    if (auto* choiceParam = dynamic_cast<juce::AudioParameterChoice*> (proc.apvts.getParameter (paramId)))
+        row->box.addItemList (choiceParam->choices, 1);
+
     row->attachment = std::make_unique<APVTS::ComboBoxAttachment> (proc.apvts, paramId, row->box);
     combos.push_back (std::move (row));
     return *combos.back();
