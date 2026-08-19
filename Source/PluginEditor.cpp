@@ -44,6 +44,21 @@ namespace
     }
 
     const juce::Colour kIndicatorPink { 0xffE8579F };
+
+    // The photo's own printed labels for the 3rd/4th faders ("MIX
+    // BALANCE" / "REVERB") don't match what they're actually wired to
+    // (Drive / Mix) - see the fader-order comment above. Rather than edit
+    // the photo, patch the labels at paint time: a dark backing box (the
+    // original text stays underneath, still faintly visible through the
+    // photo's own texture, but the box makes the new text legible) plus
+    // the corrected word in the same pink as the indicator lines.
+    // Coordinates measured the same way as the fader slots - a pixel-
+    // gridded crop of the photo, not eyeballed.
+    struct LabelFix { juce::Rectangle<int> nativeBox; const char* text; };
+    const LabelFix kLabelFixes[] = {
+        { { 550, 419, 195, 30 }, "DRIVE" },
+        { { 783, 419, 162, 30 }, "MIX" },
+    };
 }
 
 EmoBoyEditor::FaderOverlay::FaderOverlay()
@@ -86,6 +101,17 @@ void EmoBoyEditor::paint (juce::Graphics& g)
     g.fillAll (juce::Colours::black);
     if (background.isValid())
         g.drawImage (background, getLocalBounds().toFloat());
+
+    for (const auto& fix : kLabelFixes)
+    {
+        const juce::Rectangle<float> box (fix.nativeBox.getX() * kUiScale, fix.nativeBox.getY() * kUiScale,
+                                           fix.nativeBox.getWidth() * kUiScale, fix.nativeBox.getHeight() * kUiScale);
+        g.setColour (juce::Colours::black.withAlpha (0.8f));
+        g.fillRoundedRectangle (box, 3.0f);
+        g.setColour (kIndicatorPink);
+        g.setFont (juce::Font (juce::FontOptions (box.getHeight() * 0.62f, juce::Font::bold)));
+        g.drawText (fix.text, box, juce::Justification::centred);
+    }
 }
 
 void EmoBoyEditor::resized()

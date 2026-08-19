@@ -9,6 +9,41 @@ This was an autonomous session per the brief in
 `~/Downloads/logic-demo-brief-for-claude-code.md` — no check-ins, decisions
 made and documented here for the user to review and correct.
 
+## 2026-08-20: 0.1.2 - window scale, label fixes, GitHub
+
+Three small follow-ups on the 0.1.1 skin, same session:
+
+- **Window scaled to fit 1920x1080.** The photo's native 1074x976 didn't
+  leave room for a DAW window next to it. Added `kUiScale = 0.6f` in
+  `PluginEditor.cpp` - background draws scaled to the component bounds
+  instead of at native size, fader hit-boxes scale by the same factor.
+  Window now opens at ~644x586. Verified with a real screenshot (screen-
+  recording permission was granted mid-session - see below).
+- **Screen-recording permission granted mid-session.** Was missing
+  earlier, which is why 0.1.1's fader alignment was verified through the
+  offscreen `emoboy-preview` tool instead of a real screenshot. Now
+  granted to `/Applications/Claude.app`. `emoboy-preview` is still kept
+  around (useful for the next skin pass regardless).
+- **"MIX BALANCE"/"REVERB" label mismatch patched at paint time.** The
+  photo's own printed labels for the 3rd/4th faders don't match what
+  they're wired to (Drive/Mix). Rather than edit the photo pixels, drew a
+  dark backing box + the corrected word in the same pink as the indicator
+  lines directly over each, in `EmoBoyEditor::paint()`
+  (`kLabelFixes` array in `PluginEditor.cpp`). Coordinates for these two
+  boxes were mis-measured on the first attempt - a crop that didn't
+  extend far enough right silently returned an empty/black region for
+  "REVERB" and the guessed coordinates put the "MIX" label past the
+  photo's right edge entirely (1138px into a 1074px-wide image), where it
+  got clipped by the window boundary. Re-measured with a properly-bounded
+  grid crop before fixing - **worth remembering**: when a text/landmark
+  search on a cropped image comes back empty, check the crop bounds
+  before doubting the coordinates.
+- **Version bumped to 0.1.2.**
+- **Pushed to GitHub**: `github.com/hitrows/emoboy`, **private** (this
+  wasn't explicitly specified - defaulted to private given how early/WIP
+  this is and the pun-adjacent-trademark naming question already flagged
+  for "Not Sure"; flip to public whenever the user wants).
+
 ## 2026-08-20: 0.1.1, first pedal-skin pass
 
 User supplied a hardware-pedal mockup photo (`Resources/pedalbg.png`,
