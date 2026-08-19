@@ -57,11 +57,26 @@ EmoBoyEditor::EmoBoyEditor (EmoBoyProcessor& p)
     viewport.setScrollBarsShown (true, false);
 
     buildMainSection();
-    buildModSection();
-    buildRoutingSection();
+
+    // Mod1/Mod2/AM/PT + the routing matrix are fully implemented
+    // (buildModSection()/buildRoutingSection() below, plus the DSP and
+    // parameters behind them) but hidden for this build - the user wants
+    // the plain Pitch/Formant/Link/Mode/Drive/Mix core evaluated on its
+    // own first, modulation parked for a later "EmoBoy Nerd" variant.
+    // Nothing was deleted: the APVTS parameters still exist, still save/
+    // load with the session, ModMatrix still runs in PluginProcessor (at
+    // zero effect, since no route defaults to enabled) - re-enabling this
+    // is just calling these two lines again. Revisit at the 1.0 release.
+    // buildModSection();
+    // buildRoutingSection();
+
+    content.setSize (1, 1);
+    for (auto& g : groups)
+        content.setSize (juce::jmax (content.getWidth(), g->getRight() + kMargin),
+                          juce::jmax (content.getHeight(), g->getBottom() + kMargin));
 
     setResizable (true, true);
-    setSize (780, 620);
+    setSize (content.getWidth(), content.getHeight());
 }
 
 void EmoBoyEditor::buildMainSection()

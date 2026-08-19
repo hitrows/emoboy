@@ -9,6 +9,29 @@ This was an autonomous session per the brief in
 `~/Downloads/logic-demo-brief-for-claude-code.md` — no check-ins, decisions
 made and documented here for the user to review and correct.
 
+## 2026-08-19 follow-up: modulation parked for "EmoBoy Nerd"
+
+After listening, the user asked to focus on the plain core (Pitch/Formant/
+Link/Mode/Drive/Mix) and park Mod1/Mod2/AM/PT + the routing matrix for a
+future, more advanced variant — working name **"EmoBoy Nerd"**. Nothing was
+deleted:
+
+- `PluginEditor::buildModSection()` / `buildRoutingSection()` still exist,
+  just no longer called from the constructor (commented out with the
+  reasoning inline). Re-enabling the UI is those two lines back.
+- All the underlying APVTS parameters (Mod1/Mod2/AM/PT knobs, all 32
+  `route_*_on`/`route_*_depth` params), `ModMatrix`, `LFO`,
+  `EnvelopeFollower`, and the routing logic in
+  `PluginProcessor::updateModulationSources()`/`processBlock()` are
+  untouched and still running every block - at zero audible effect, since
+  no route is enabled by default. Nothing to port later; it's all live.
+- The plugin window now sizes to just the main section instead of the full
+  scrollable layout.
+
+**Reminder for the user: bring this back into the UI when EmoBoy reaches
+1.0** (or spin it into the separate "EmoBoy Nerd" product, per the working
+name above) - whichever the user decides at that point.
+
 ## Status: done, per the brief's own Definition of Done
 
 - Builds via CMake + Xcode generator.
