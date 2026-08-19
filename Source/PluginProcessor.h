@@ -1,0 +1,101 @@
+#pragma once
+
+#include <juce_audio_processors/juce_audio_processors.h>
+#include "Parameters.h"
+#include "dsp/PitchFormantEngine.h"
+#include "dsp/PitchDetector.h"
+#include "dsp/Modulation.h"
+#include "dsp/Drive.h"
+
+class EmoBoyProcessor : public juce::AudioProcessor
+{
+public:
+    EmoBoyProcessor();
+    ~EmoBoyProcessor() override = default;
+
+    void prepareToPlay (double sampleRate, int samplesPerBlock) override;
+    void releaseResources() override {}
+    bool isBusesLayoutSupported (const BusesLayout& layouts) const override;
+    void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
+
+    juce::AudioProcessorEditor* createEditor() override;
+    bool hasEditor() const override { return true; }
+
+    const juce::String getName() const override { return JucePlugin_Name; }
+    bool acceptsMidi() const override { return false; }
+    bool producesMidi() const override { return false; }
+    bool isMidiEffect() const override { return false; }
+    double getTailLengthSeconds() const override { return 0.0; }
+
+    int getNumPrograms() override { return 1; }
+    int getCurrentProgram() override { return 0; }
+    void setCurrentProgram (int) override {}
+    const juce::String getProgramName (int) override { return {}; }
+    void changeProgramName (int, const juce::String&) override {}
+
+    void getStateInformation (juce::MemoryBlock& destData) override;
+    void setStateInformation (const void* data, int sizeInBytes) override;
+
+    juce::AudioProcessorValueTreeState apvts;
+
+private:
+    // Cached raw pointers into the APVTS - avoids a string lookup per
+    // parameter per block. All of these are owned by apvts; never delete.
+    std::atomic<float>* pPitch = nullptr;
+    std::atomic<float>* pFormant = nullptr;
+    std::atomic<float>* pLink = nullptr;
+    std::atomic<float>* pMode = nullptr;
+    std::atomic<float>* pRobotNote = nullptr;
+    std::atomic<float>* pDrive = nullptr;
+    std::atomic<float>* pMix = nullptr;
+
+    std::atomic<float>* pMod1Rate = nullptr;
+    std::atomic<float>* pMod1Phase = nullptr;
+    std::atomic<float>* pMod1Level = nullptr;
+    std::atomic<float>* pMod2Rate = nullptr;
+    std::atomic<float>* pMod2Phase = nullptr;
+    std::atomic<float>* pMod2Level = nullptr;
+
+    std::atomic<float>* pAmAttack = nullptr;
+    std::atomic<float>* pAmRelease = nullptr;
+    std::atomic<float>* pAmLevel = nullptr;
+
+    std::atomic<float>* pPtSmooth = nullptr;
+    std::atomic<float>* pPtOffset = nullptr;
+    std::atomic<float>* pPtLevel = nullptr;
+
+    std::array<std::array<std::atomic<float>*, ModMatrix::numTargets>, ModMatrix::numSources> pRouteOn {};
+    std::array<std::array<std::atomic<float>*, ModMatrix::numTargets>, ModMatrix::numSources> pRouteDepth {};
+
+    PitchFormantEngine engine;
+    PitchDetector pitchDetector;
+    LFO lfo1, lfo2;
+    EnvelopeFollower envFollower;
+    ModMatrix modMatrix;
+    std::vector<Drive> driveStages; // one per channel
+
+    // Dry path delay compensation, matched sample-for-sample to
+    // engine.getLatencySamples() so Mix < 100% doesn't comb-filter.
+    juce::AudioBuffer<float> dryDelayBuffer;
+    int dryDelayWritePos = 0;
+    int dryDelaySamples = 0;
+
+    // PT modulation source smoothing state (one-pole, time constant from
+    // the PT Smooth parameter).
+    float ptSmoothedSemitones = 0.0f;
+
+    // Currently-held MIDI note for Robot mode, -1 if none held.
+    int heldMidiNote = -1;
+
+    double currentSampleRate = 44100.0;
+
+    float currentPitchSemitones = 0.0f;   // for metering/UI if ever needed
+    float currentFormantSemitones = 0.0f;
+
+    void updateModulationSources (const juce::AudioBuffer<float>& input, int numSamples);
+    void handleMidi (const juce::MidiBuffer& midi);
+    float midiNoteToHz (int note) const { return 440.0f * std::pow (2.0f, ((float) note - 69.0f) / 12.0f); }
+    float hzToSemitone (float hz) const { return hz > 1.0f ? 12.0f * std::log2 (hz / 440.0f) + 69.0f : 0.0f; }
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EmoBoyProcessor)
+};
