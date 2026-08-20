@@ -15,7 +15,7 @@ set(PLUGIN_CODE         Emob)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Minimum macOS version")
 set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "Build architectures")
 
-project(${PROJECT_NAME} VERSION 0.1.2)
+project(${PROJECT_NAME} VERSION 0.1.3)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -93,13 +93,16 @@ target_compile_definitions(${PROJECT_NAME} PUBLIC
     EMOBOY_NERD_FEATURES=$<BOOL:${EMOBOY_NERD_FEATURES}>)
 
 # ---------------------------------------------------------------------------
-# Panel artwork - the user's hardware-pedal mockup photo, used as-is as the
-# editor background for this placeholder skin (0.1.1). Real layered design
-# comes later; this is just "does the geometry line up".
+# Panel artwork - the user's hardware-pedal mockup, now split into a clean
+# background layer (no text labels, no cap graphics) and a reusable fader
+# cap sprite, both supplied by the user (pics/bg-clean.png, pics/faders.png,
+# copied into Resources/). Real layered design (per-fader-state art, etc.)
+# still comes later; this is "real fader caps that move", not a line.
 # ---------------------------------------------------------------------------
 juce_add_binary_data(EmoBoyAssets
     SOURCES
-        Resources/pedalbg.png)
+        Resources/pedalbg.png
+        Resources/fadercap.png)
 
 set_target_properties(EmoBoyAssets PROPERTIES
     POSITION_INDEPENDENT_CODE TRUE)

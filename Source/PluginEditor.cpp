@@ -3,65 +3,50 @@
 
 namespace
 {
-    // Pixel coordinates measured directly off Resources/pedalbg.png
-    // (1074x976 native) - see HANDOFF.md, "0.1.1 pedal skin" for how these
-    // were found (a grid overlay crop, not eyeballed blind) and the
-    // caveat that they are a first pass, not verified against a live
-    // screenshot (screen recording permission wasn't available in this
-    // session - verified instead via an offline snapshot tool, see
-    // tools/preview.cpp).
-    constexpr int kFaderTravelTop = 500;    // y at max value
-    constexpr int kFaderTravelBottom = 785; // y at min value
-    constexpr int kFaderHalfWidth = 45;
+    // Fader travel, measured off the user's own guide (pics/lines.png): a
+    // red line (cap's pink stripe position at max value), a yellow line
+    // (middle - matches the cap sprite's own resting position almost
+    // exactly, off by under a pixel), and a green line (min value). Same
+    // guide, same 3 numbers, for all 4 faders - not per-fader.
+    constexpr int kFaderTravelTop = 504;    // red line - value = max
+    constexpr int kFaderTravelBottom = 768; // green line - value = min
 
-    // The photo is 1074x976 native - too big to fit an 1920x1080 screen
-    // comfortably alongside a DAW window. Everything (window size, fader
-    // hit-boxes) is scaled down by this factor; the background image is
-    // drawn scaled to match, so it stays one consistent picture rather
-    // than a native-res crop.
+    // Cap sprite geometry, measured off pics/faders.png via its alpha
+    // channel bounding box (not eyeballed) - see HANDOFF.md.
+    constexpr int kCapNativeWidth = 66;
+    constexpr int kCapNativeHeight = 106;
+    constexpr int kFaderHalfWidth = 40; // hit-box half-width, a bit wider than the cap for an easier grab
+
+    // Same 0.6x scale as the 0.1.1/0.1.2 skin - fits an 1920x1080 screen
+    // next to a DAW window.
     constexpr float kUiScale = 0.6f;
 
     struct FaderSlot { int xCenter; };
 
-    // Order matches the photo left-to-right: Pitch, Formant, then the two
-    // faders the user mapped to Drive and Mix (printed on the photo itself
-    // as "Mix Balance" and "Reverb" - a mismatch with the mockup's own
-    // placeholder text, not with the user's instructions, which are what
-    // this follows).
-    constexpr FaderSlot kPitchSlot   { 380 };
-    constexpr FaderSlot kFormantSlot { 500 };
-    constexpr FaderSlot kDriveSlot   { 650 };
-    constexpr FaderSlot kMixSlot     { 858 };
+    // Cap x-centres, measured off pics/faders.png (alpha bounding boxes of
+    // the 4 sprite copies) - these superseded the earlier eyeballed values
+    // from 0.1.1/0.1.2, which were off by up to ~30px on the last two.
+    constexpr FaderSlot kPitchSlot   { 375 };
+    constexpr FaderSlot kFormantSlot { 501 };
+    constexpr FaderSlot kDriveSlot   { 626 };
+    constexpr FaderSlot kMixSlot     { 829 };
 
-    // Coordinates above are in native photo-pixel space; this returns the
-    // scaled-down rect the slider actually gets, in editor-window space.
+    // The slider's hit-box is padded above/below the pure travel range by
+    // half the cap's height, so the cap sprite never gets clipped against
+    // the component's own bounds when it's drawn at the very top or
+    // bottom of its travel (Component::paint is clipped to local bounds).
     juce::Rectangle<int> faderBounds (FaderSlot slot)
     {
-        juce::Rectangle<int> native { slot.xCenter - kFaderHalfWidth, kFaderTravelTop,
-                                       kFaderHalfWidth * 2, kFaderTravelBottom - kFaderTravelTop };
+        const int capHalfHeight = kCapNativeHeight / 2;
+        juce::Rectangle<int> native { slot.xCenter - kFaderHalfWidth, kFaderTravelTop - capHalfHeight,
+                                       kFaderHalfWidth * 2, (kFaderTravelBottom - kFaderTravelTop) + kCapNativeHeight };
         return { juce::roundToInt (native.getX() * kUiScale), juce::roundToInt (native.getY() * kUiScale),
                  juce::roundToInt (native.getWidth() * kUiScale), juce::roundToInt (native.getHeight() * kUiScale) };
     }
-
-    const juce::Colour kIndicatorPink { 0xffE8579F };
-
-    // The photo's own printed labels for the 3rd/4th faders ("MIX
-    // BALANCE" / "REVERB") don't match what they're actually wired to
-    // (Drive / Mix) - see the fader-order comment above. Rather than edit
-    // the photo, patch the labels at paint time: a dark backing box (the
-    // original text stays underneath, still faintly visible through the
-    // photo's own texture, but the box makes the new text legible) plus
-    // the corrected word in the same pink as the indicator lines.
-    // Coordinates measured the same way as the fader slots - a pixel-
-    // gridded crop of the photo, not eyeballed.
-    struct LabelFix { juce::Rectangle<int> nativeBox; const char* text; };
-    const LabelFix kLabelFixes[] = {
-        { { 550, 419, 195, 30 }, "DRIVE" },
-        { { 783, 419, 162, 30 }, "MIX" },
-    };
 }
 
-EmoBoyEditor::FaderOverlay::FaderOverlay()
+EmoBoyEditor::FaderOverlay::FaderOverlay (const juce::Image& capImageIn)
+    : cap (capImageIn)
 {
     setSliderStyle (juce::Slider::LinearVertical);
     setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
@@ -69,20 +54,31 @@ EmoBoyEditor::FaderOverlay::FaderOverlay()
 
 void EmoBoyEditor::FaderOverlay::paint (juce::Graphics& g)
 {
+    if (! cap.isValid())
+        return;
+
     const auto bounds = getLocalBounds().toFloat();
     const double range = getMaximum() - getMinimum();
     const float proportion = range > 0.0 ? (float) ((getValue() - getMinimum()) / range) : 0.0f;
-    const float y = bounds.getBottom() - proportion * bounds.getHeight();
 
-    g.setColour (kIndicatorPink);
-    g.fillRect (bounds.getX(), y - 1.5f, bounds.getWidth(), 3.0f);
+    const float capW = kCapNativeWidth * kUiScale;
+    const float capH = kCapNativeHeight * kUiScale;
+    const float travelHeight = bounds.getHeight() - capH; // pure travel, padding excluded
+
+    // proportion = 1 (max) -> cap centre at the top of the travel (padding
+    // below it); proportion = 0 (min) -> cap centre at the bottom.
+    const float centreY = capH * 0.5f + (1.0f - proportion) * travelHeight;
+    const float centreX = bounds.getWidth() * 0.5f;
+
+    g.drawImage (cap, { centreX - capW * 0.5f, centreY - capH * 0.5f, capW, capH });
 }
 
 EmoBoyEditor::EmoBoyEditor (EmoBoyProcessor& p)
-    : AudioProcessorEditor (&p), proc (p)
+    : AudioProcessorEditor (&p), proc (p),
+      background (juce::ImageCache::getFromMemory (BinaryData::pedalbg_png, BinaryData::pedalbg_pngSize)),
+      capImage (juce::ImageCache::getFromMemory (BinaryData::fadercap_png, BinaryData::fadercap_pngSize)),
+      pitchFader (capImage), formantFader (capImage), driveFader (capImage), mixFader (capImage)
 {
-    background = juce::ImageCache::getFromMemory (BinaryData::pedalbg_png, BinaryData::pedalbg_pngSize);
-
     for (auto* fader : { &pitchFader, &formantFader, &driveFader, &mixFader })
         addAndMakeVisible (fader);
 
@@ -101,17 +97,6 @@ void EmoBoyEditor::paint (juce::Graphics& g)
     g.fillAll (juce::Colours::black);
     if (background.isValid())
         g.drawImage (background, getLocalBounds().toFloat());
-
-    for (const auto& fix : kLabelFixes)
-    {
-        const juce::Rectangle<float> box (fix.nativeBox.getX() * kUiScale, fix.nativeBox.getY() * kUiScale,
-                                           fix.nativeBox.getWidth() * kUiScale, fix.nativeBox.getHeight() * kUiScale);
-        g.setColour (juce::Colours::black.withAlpha (0.8f));
-        g.fillRoundedRectangle (box, 3.0f);
-        g.setColour (kIndicatorPink);
-        g.setFont (juce::Font (juce::FontOptions (box.getHeight() * 0.62f, juce::Font::bold)));
-        g.drawText (fix.text, box, juce::Justification::centred);
-    }
 }
 
 void EmoBoyEditor::resized()

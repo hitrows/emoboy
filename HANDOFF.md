@@ -9,6 +9,69 @@ This was an autonomous session per the brief in
 `~/Downloads/logic-demo-brief-for-claude-code.md` — no check-ins, decisions
 made and documented here for the user to review and correct.
 
+## 2026-08-20: 0.1.3 - real fader-cap art, zero labels
+
+User supplied proper layered assets in `pics/`: `bg-clean.png` (background
+with every text label AND the fader caps themselves removed - just empty
+grooves) and `faders.png` (one fader-cap sprite, copied 4× at its 4 resting
+x-positions, transparent elsewhere). Replaces the 0.1.1/0.1.2 thin-pink-
+line placeholder with the real cap graphic sliding along the track - what
+the user asked for as "нормальные фейдеры".
+
+**Before building, asked two questions** (per the user's own request to be
+consulted from this point on):
+1. The 4th (Mix) fader's track visually reads longer than the other
+   three (starts higher) - give it its own longer travel, or keep all 4
+   uniform? User said they'd send a reference image rather than answer
+   directly.
+2. With zero labels anywhere, is any hover-tooltip affordance wanted so
+   someone other than the user could tell which fader is which? User: no,
+   nothing - "если надо я тебе скажу" (they'll ask if they want it).
+
+**The reference image** (`pics/lines.png`) settled Q1 definitively: three
+horizontal guide lines (red/yellow/green = max/mid/min), spanning the full
+width across all 4 fader columns in *one* guide, not per-column - i.e.
+uniform travel for all four, not the taller-track theory. Measured via
+alpha-channel search rather than eyeballed: red y≈504, yellow y≈634, green
+y≈768. The yellow (mid) line landed within ~1px of the cap sprite's own
+resting-position center (measured independently from `faders.png`'s alpha
+bounding box, y 582-687 → center 634.5) - good cross-check that both
+measurements are reading the same real thing.
+
+**Implementation** (`Source/PluginEditor.h/.cpp`):
+- `FaderOverlay` now takes a `const juce::Image&` cap reference and draws
+  it (via `Graphics::drawImage` into a computed rect) instead of a line.
+  Cap position = value mapped linearly between the red/green y's,
+  centred both axes on the drawn rect.
+- Each slider's hit-box is padded above/below the pure travel range by
+  half the cap's height (53px native) - without this, the cap gets
+  clipped by the component's own paint-clip region when a value sits at
+  a true extreme (top of Mix at 100%, bottom of Drive at 0%, etc.), since
+  `Component::paint` is clipped to `getLocalBounds()`.
+- Fader x-centres re-measured from `faders.png`'s alpha bounding boxes
+  (375/501/626/829) - supersedes the eyeballed 0.1.1 values, which were
+  off by up to ~30px on the last two columns.
+- The 0.1.2 "DRIVE"/"MIX" text-patch code (`kLabelFixes`, dark box + pink
+  text drawn over the mismatched printed labels) is gone entirely - no
+  longer needed, the new background has no labels to patch.
+- New `Resources/fadercap.png` (cropped once from `faders.png`, 66x106,
+  reused for all 4 sliders) added to the `EmoBoyAssets` binary-data
+  target alongside the replaced `Resources/pedalbg.png`.
+
+**A verification wrinkle worth remembering**: the first `emoboy-preview`
+run after this change appeared to render the *old* labelled artwork with
+the old thin-line indicators, even though `BinaryData.h`/`.cpp` and every
+object file involved were freshly rebuilt (checked mtimes and the exact
+embedded `pedalbg_pngSize` against the real file size - both matched the
+new file). Re-running the exact same command with the old output files
+deleted first produced the correct, current render. Never fully
+root-caused (a `Read`-tool-side caching quirk on a just-rewritten path
+seemed the most likely explanation, not a build problem) - but it's the
+reason to re-verify with a byte-identical fresh file (delete-then-regenerate,
+not just re-read) if a render ever looks implausibly stale again.
+
+Version bumped to 0.1.3. Pushed to `github.com/hitrows/emoboy`.
+
 ## 2026-08-20: 0.1.2 - window scale, label fixes, GitHub
 
 Three small follow-ups on the 0.1.1 skin, same session:
