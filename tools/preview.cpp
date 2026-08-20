@@ -183,24 +183,24 @@ int main()
         EmoBoyProcessor proc;
         proc.prepareToPlay (44100.0, 512);
         setParam (proc, Param::mode, (float) (int) Param::Mode::Robot);
-        setParam (proc, Param::robotNote, 0.0f); // C2, index 0 -> 7 o'clock (rework, 2026-08-20)
-        snapshot (proc, "preview_robot_noteC2.png");
+        setParam (proc, Param::robotNote, 0.0f); // index 0, bottom of the list -> 7 o'clock (rework, 2026-08-20)
+        snapshot (proc, "preview_robot_noteLow.png");
     }
 
     {
         EmoBoyProcessor proc;
         proc.prepareToPlay (44100.0, 512);
         setParam (proc, Param::mode, (float) (int) Param::Mode::Robot);
-        // index 12 = C3 left untouched -> should be default already, straight up (12 o'clock)
-        snapshot (proc, "preview_robot_noteC3_default.png");
+        // index 12 = reference note, left untouched -> should be default already, straight up (12 o'clock)
+        snapshot (proc, "preview_robot_noteCentre_default.png");
     }
 
     {
         EmoBoyProcessor proc;
         proc.prepareToPlay (44100.0, 512);
         setParam (proc, Param::mode, (float) (int) Param::Mode::Robot);
-        setParam (proc, Param::robotNote, 23.0f); // B3, index 23 -> 5 o'clock
-        snapshot (proc, "preview_robot_noteB3.png");
+        setParam (proc, Param::robotNote, 23.0f); // index 23, top of the list -> 5 o'clock
+        snapshot (proc, "preview_robot_noteHigh.png");
     }
 
     checkBypass();

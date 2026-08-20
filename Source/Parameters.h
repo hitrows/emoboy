@@ -17,7 +17,7 @@ namespace Param
     static const juce::String formant      = "formant";     // semitones, -12..12
     static const juce::String link         = "link";        // bool
     static const juce::String mode         = "mode";        // choice: Transpose/Quantize/Robot
-    static const juce::String robotNote    = "robotNote";   // choice C2..B3 (24 notes)
+    static const juce::String robotNote    = "robotNote";   // choice C1..B2 (24 notes, Logic Pro's octave numbering - see Parameters.cpp)
     static const juce::String drive        = "drive";       // 0..100 %
     static const juce::String mix          = "mix";         // 0..100 %
     static const juce::String bypass       = "bypass";      // bool, wired to getBypassParameter()

@@ -9,6 +9,43 @@ This was an autonomous session per the brief in
 `~/Downloads/logic-demo-brief-for-claude-code.md` — no check-ins, decisions
 made and documented here for the user to review and correct.
 
+## 2026-08-20: 0.1.7 - Robot Note octave labels fixed to match Logic Pro
+
+User asked to check the note-naming algorithm specifically against Logic
+Pro's own octave convention. There are two real, incompatible octave-
+numbering conventions in wide use for the same MIDI note numbers:
+
+- **ASA / scientific pitch notation** (most synths, most other DAWs):
+  middle C (MIDI 60) = **C4**.
+- **Logic Pro's own convention**: middle C (MIDI 60) = **C3** - one
+  octave lower than the above for the same physical pitch.
+
+`Parameters.cpp`'s note-name generator was written against the first
+convention (`for octave = 2 to 3`, matching MIDI 36-59 to "C2".."B3").
+Checked the numbers directly: MIDI 36 = 65.4 Hz either way (the actual
+sound was never wrong - the MIDI note number, not a note name, is what
+drives pitch), but that frequency is "C2" under ASA notation and "C1" in
+Logic. Exactly matches what the user reported by ear/eye while testing in
+Logic: this build's "C3" sounded like Logic's own "C2", and this build's
+"C2" was Logic's "C1" - a consistent one-octave-high labelling error
+throughout the whole 24-entry list.
+
+**Fix**: `for octave = 1 to 2` instead of `2 to 3` - only the display
+strings change (now "C1".."B2"), matched to Logic's own numbering.
+`kRobotNoteBase = 36` in `PluginProcessor.cpp` is untouched, since it maps
+list-index to MIDI note number directly and was never wrong. Default index
+is still 12, now labelled "C2" (was "C3") - same physical note, same
+straight-up 12-o'clock resting position, just the correct name for it in
+Logic.
+
+Verified the generated list directly (`['C1','C#1',...,'B1','C2',...,
+'B2']`, index 0/12/23 = C1/C2/B2) rather than trusting the loop bounds
+change by eye. `auval` and the autogain/bypass numeric checks
+(`tools/preview.cpp`) still pass unchanged, as expected - this was a
+labelling-only fix, no DSP or MIDI-mapping code touched.
+
+Version bumped to 0.1.7. Pushed to `github.com/hitrows/emoboy`.
+
 ## 2026-08-20: 0.1.6 - Robot Note knob reworked around C3, native dialogs, BYPASS footswitch
 
 Three follow-ups in one go, same session as 0.1.5:

@@ -15,7 +15,7 @@ namespace
     constexpr float kDriveModRangePercent = 50.0f;
 #endif
 
-    constexpr int kRobotNoteBase = 36; // index 0 ("C2" in the selector) = MIDI note 36
+    constexpr int kRobotNoteBase = 36; // index 0 ("C1" in the selector, Logic's octave numbering) = MIDI note 36
 }
 
 EmoBoyProcessor::EmoBoyProcessor()

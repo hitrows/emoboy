@@ -57,16 +57,18 @@ namespace
     juce::Rectangle<int> knobBounds() { return scaledNativeRect ({ kKnobCentreX - kKnobRadius, kKnobCentreY - kKnobRadius, kKnobRadius * 2, kKnobRadius * 2 }); }
 
     // Robot Note angle mapping, reworked 2026-08-20: 12 o'clock (angle 0)
-    // is the reference note C3 (index 12 in the 24-entry C2..B3 list),
-    // not one end of the sweep. Clockwise raises the note a semitone at a
-    // time up to B3 at 5 o'clock (+150deg, 11 steps); counter-clockwise
-    // lowers it down to C2 at 7 o'clock (-150deg, 12 steps) - the long way
-    // through 12, same ~300 degree sweep as before. The two halves get
-    // very slightly different angular steps (150/11 vs 150/12, ~9% apart)
-    // because C3 isn't exactly centred in a 24-note C2-B3 range - a
-    // consequence of the user's explicit endpoints, not a bug.
-    constexpr int kRobotNoteCentreIndex = 12; // C3
-    constexpr int kRobotNoteMaxIndex = 23;    // B3
+    // is the reference note (index 12 in the 24-entry list - "C2" in
+    // Logic Pro's own octave numbering, see Parameters.cpp), not one end
+    // of the sweep. Clockwise raises the note a semitone at a time up to
+    // the top of the list at 5 o'clock (+150deg, 11 steps); counter-
+    // clockwise lowers it down to the bottom at 7 o'clock (-150deg, 12
+    // steps) - the long way through 12, same ~300 degree sweep as before.
+    // The two halves get very slightly different angular steps (150/11 vs
+    // 150/12, ~9% apart) because the reference note isn't exactly centred
+    // in the 24-note range - a consequence of the user's explicit
+    // endpoints, not a bug.
+    constexpr int kRobotNoteCentreIndex = 12; // "C2" (Logic numbering)
+    constexpr int kRobotNoteMaxIndex = 23;    // "B2" (Logic numbering)
     constexpr float kKnobSweepHalf = 2.6180f; // 150 degrees, one side
 
     float angleForRobotNoteIndex (int index)
