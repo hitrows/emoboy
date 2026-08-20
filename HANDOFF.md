@@ -9,6 +9,73 @@ This was an autonomous session per the brief in
 `~/Downloads/logic-demo-brief-for-claude-code.md` — no check-ins, decisions
 made and documented here for the user to review and correct.
 
+## 2026-08-20: 0.1.5 - Robot Note knob + Robot footswitch, first UI element beyond the 4 faders
+
+User supplied 3 more layered assets in `pics/`: an updated `bg-clean.png`
+(now includes a rotary knob graphic and an "Emo Boy" wordmark next to
+"HITROWS"), `knob.png` (transparent, just a yellow guide circle marking
+where the knob's face sits - measured via alpha bounding box: centre
+(194,506), radius 28, cross-checked visually against the knob in
+bg-clean.png), and `light transp.png` (every panel button's lit/backlit
+look, pre-rendered as its own sprite with the glow already expanded ~3%/
+softened ~30% - so no manual glow synthesis was needed, just cropping out
+the Robot button's sprite).
+
+**Shown before building anything**, per the user's explicit ask: two tick-
+mark style options for the knob (bright branding pink vs. a muted tone
+matching the fader caps' own inlaid stripe) and the Robot button's glow
+composited onto the panel. User picked the muted tone and confirmed the
+composited glow as-is.
+
+**Two things worth being confirmed rather than assumed**, both resolved by
+asking directly:
+1. **Rotation direction.** The user's own words ("5 часов это C, 7 часов
+   это B") describe the *opposite* of the standard convention (a normal
+   pot's minimum/counterclockwise limit sits at ~7 o'clock, maximum at
+   ~5 o'clock going the long way through 12) - taken literally, clockwise
+   rotation would *lower* the note from B down to C. Asked rather than
+   silently "fixing" it or blindly implementing the literal wording;
+   confirmed the intent was actually the standard direction (clockwise =
+   higher note, C at 7 o'clock/minimum, B at 5 o'clock/maximum) - which
+   also happens to be JUCE's own default rotary-slider angle convention,
+   so no inversion math was needed after all.
+2. **Robot button behaviour**: confirmed as a toggle (Robot <-> Transpose),
+   footswitch-style, matching the pedal metaphor. Quantize mode is still
+   not reachable from this UI - unchanged from before, just noting it
+   stays that way.
+
+**Implementation** (`Source/PluginEditor.h/.cpp`):
+- `RobotKnob : juce::Slider` (`RotaryHorizontalVerticalDrag` style, default
+  LookAndFeel drawing suppressed same as `FaderOverlay`) draws only a
+  tick line at an angle computed directly from the value - no
+  `setRotaryParameters()` needed since the drawing is fully custom.
+  Angle range -150deg to +150deg (measured clockwise from 12 o'clock),
+  matching the confirmed 7-to-5-o'clock sweep through the top.
+- `RobotButton : juce::Button` draws nothing itself when off (the unlit
+  look is baked into the background photo); when `Mode == Robot`, draws
+  the cropped glow sprite (`Resources/robotglow.png`) over its bounds.
+  `onClick` toggles the `mode` parameter between `Robot` and `Transpose`
+  directly.
+- Kept in sync via a 30Hz `juce::Timer` polling `mode`'s raw parameter
+  value, rather than `AudioProcessorValueTreeState`'s parameter-listener
+  callback - that callback can fire from whatever thread changed the
+  value (the audio thread, for host automation), and `repaint()` isn't
+  safe to call off the message thread. Polling is simple and correct;
+  30Hz is more than enough for a footswitch backlight.
+- New `Resources/robotglow.png`, cropped from `pics/"light transp.png"`
+  with padding around the measured alpha bounding box so the soft
+  falloff isn't clipped, added to the `EmoBoyAssets` binary-data target.
+
+**Verified via `tools/preview.cpp`** before calling it done (3 new
+snapshot cases: `robotNote` = 0/11/23 with `Mode` forced to `Robot`) -
+tick angle lands at 7 o'clock for index 0 (C), ~12 o'clock for index 11,
+5 o'clock for index 23 (B), and the backlight is correctly off in the
+`Mode != Robot` default snapshot and on in all three Robot-mode ones -
+confirming the 30Hz timer sync works even in the offscreen test harness,
+not just interactively.
+
+Version bumped to 0.1.5. Pushed to `github.com/hitrows/emoboy`.
+
 ## 2026-08-20: 0.1.4 - user feedback: pitch step, Drive rescale, auto gain, type-in values
 
 User's read after actually listening: **the Pitch/Formant engine beats Vocal

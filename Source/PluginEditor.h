@@ -9,13 +9,18 @@
 // one cap cropped out and reused for all 4) that actually slides along the
 // fader's travel, instead of the 0.1.1/0.1.2 thin-line placeholder. Only the
 // 4 continuous parameters implemented so far (Pitch/Formant/Drive/Mix) are
-// exposed - no labels anywhere, by explicit request. Link/Mode/Robot Note
-// still exist and work at their defaults, just not shown here.
+// exposed - no labels anywhere, by explicit request. Link/Quantize aren't
+// reachable from this UI at all yet.
 //
 // Double-clicking any fader opens a small numeric entry box (added 0.1.4) -
 // the only "text on the panel" that exists, and only while actively typing.
+//
+// 0.1.5 adds the Robot Note knob and the Robot toggle button/backlight -
+// Mode is now reachable from the UI (toggles Robot <-> Transpose), still
+// with no Quantize access.
 // ---------------------------------------------------------------------------
-class EmoBoyEditor : public juce::AudioProcessorEditor
+class EmoBoyEditor : public juce::AudioProcessorEditor,
+                      private juce::Timer
 {
 public:
     explicit EmoBoyEditor (EmoBoyProcessor&);
@@ -44,12 +49,47 @@ private:
         const juce::Image& cap;
     };
 
+    // The Robot Note pot - a rotary Slider with default LookAndFeel drawing
+    // suppressed the same way; paint() draws only a thin tick at the value's
+    // angle, in the muted tone matching the fader caps' own inlaid stripe
+    // (chosen over the brighter branding pink - user's call, 2026-08-20).
+    class RobotKnob : public juce::Slider
+    {
+    public:
+        RobotKnob();
+        void paint (juce::Graphics&) override;
+    };
+
+    // The ROBOT footswitch. Its unlit look is baked into the background
+    // photo; this just overlays the user-supplied pre-blurred/expanded
+    // glow sprite (pics/"light transp.png", cropped to just this button)
+    // when Mode == Robot, and toggles Mode <-> Transpose on click.
+    class RobotButton : public juce::Button
+    {
+    public:
+        RobotButton();
+        void setGlowImage (const juce::Image& glowImage);
+        void setLit (bool shouldBeLit);
+
+    private:
+        void paintButton (juce::Graphics&, bool, bool) override;
+        juce::Image glow;
+        bool lit = false;
+    };
+
+    void timerCallback() override; // polls Mode to keep the backlight in sync (incl. host automation/state loads, not just clicks here)
+
     EmoBoyProcessor& proc;
     juce::Image background;
     juce::Image capImage;
 
     FaderOverlay pitchFader, formantFader, driveFader, mixFader;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> pitchAttachment, formantAttachment, driveAttachment, mixAttachment;
+
+    RobotKnob robotKnob;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> robotNoteAttachment;
+
+    RobotButton robotButton;
 
     // Created on demand by beginTextEntry(), destroyed once the value is
     // committed - not a permanent fixture, so it never counts as a label

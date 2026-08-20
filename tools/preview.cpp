@@ -139,5 +139,29 @@ int main()
         snapshot (proc, "preview_mid.png");
     }
 
+    {
+        EmoBoyProcessor proc;
+        proc.prepareToPlay (44100.0, 512);
+        setParam (proc, Param::mode, (float) (int) Param::Mode::Robot);
+        setParam (proc, Param::robotNote, 0.0f); // C2, index 0 -> 7 o'clock
+        snapshot (proc, "preview_robot_noteC.png");
+    }
+
+    {
+        EmoBoyProcessor proc;
+        proc.prepareToPlay (44100.0, 512);
+        setParam (proc, Param::mode, (float) (int) Param::Mode::Robot);
+        setParam (proc, Param::robotNote, 11.0f); // 12 o'clock-ish, halfway
+        snapshot (proc, "preview_robot_noteMid.png");
+    }
+
+    {
+        EmoBoyProcessor proc;
+        proc.prepareToPlay (44100.0, 512);
+        setParam (proc, Param::mode, (float) (int) Param::Mode::Robot);
+        setParam (proc, Param::robotNote, 23.0f); // B3, index 23 -> 5 o'clock
+        snapshot (proc, "preview_robot_noteB.png");
+    }
+
     return 0;
 }
