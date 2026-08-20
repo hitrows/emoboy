@@ -31,11 +31,24 @@ public:
         filterCoeff = std::exp (-2.0f * pi * cutoff / (float) sampleRate);
     }
 
-    // amount: 0..1 (from the Drive parameter, already /100)
+    // amount: 0..2 - the Drive parameter maps 0-50% to 0-1 here and
+    // 50-100% to 1-2, so what used to be the full-drive sound at the old
+    // 100% now sits at 50%, and the top half of the knob pushes twice as
+    // far (2026-08-20, user's own ask, calibrated by ear against the
+    // pre-rescale build - not re-derived here, just extended past 1.0).
     float processSample (float x, float amount)
     {
         if (amount <= 0.0001f)
             return x;
+
+        // The dry/wet crossfade at the very end is deliberately clamped to
+        // 1 (fully wet) even past amount=1 - letting it keep scaling would
+        // extrapolate past the shaped signal itself (2*output - x territory),
+        // which overshoots the tanh's own bound instead of driving harder
+        // through it. Every other stage below keeps using the full,
+        // unclamped amount, which is what actually delivers "twice as much"
+        // character at the top of the range.
+        const float blendAmount = amount < 1.0f ? amount : 1.0f;
 
         // Pre-emphasis: differentiator-style high-shelf boost.
         const float highPart = x - preState;
@@ -60,10 +73,10 @@ public:
         deState += (1.0f - filterCoeff) * (compensated - deState);
         const float output = deState + (compensated - deState) * (1.0f - amount * 0.5f);
 
-        // Blend in proportion to amount so Drive = 0 is exactly
+        // Blend in proportion to (clamped) amount so Drive = 0 is exactly
         // transparent and the low end of the knob is a smooth ramp, not a
         // switch.
-        return x + amount * (output - x);
+        return x + blendAmount * (output - x);
     }
 
 private:

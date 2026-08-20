@@ -73,6 +73,12 @@ void EmoBoyEditor::FaderOverlay::paint (juce::Graphics& g)
     g.drawImage (cap, { centreX - capW * 0.5f, centreY - capH * 0.5f, capW, capH });
 }
 
+void EmoBoyEditor::FaderOverlay::mouseDoubleClick (const juce::MouseEvent&)
+{
+    if (onDoubleClick)
+        onDoubleClick();
+}
+
 EmoBoyEditor::EmoBoyEditor (EmoBoyProcessor& p)
     : AudioProcessorEditor (&p), proc (p),
       background (juce::ImageCache::getFromMemory (BinaryData::pedalbg_png, BinaryData::pedalbg_pngSize)),
@@ -87,6 +93,11 @@ EmoBoyEditor::EmoBoyEditor (EmoBoyProcessor& p)
     driveAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (proc.apvts, Param::drive, driveFader);
     mixAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (proc.apvts, Param::mix, mixFader);
 
+    pitchFader.onDoubleClick = [this] { beginTextEntry (pitchFader); };
+    formantFader.onDoubleClick = [this] { beginTextEntry (formantFader); };
+    driveFader.onDoubleClick = [this] { beginTextEntry (driveFader); };
+    mixFader.onDoubleClick = [this] { beginTextEntry (mixFader); };
+
     const int nativeW = background.getWidth() > 0 ? background.getWidth() : 1074;
     const int nativeH = background.getHeight() > 0 ? background.getHeight() : 976;
     setSize (juce::roundToInt (nativeW * kUiScale), juce::roundToInt (nativeH * kUiScale));
@@ -97,6 +108,43 @@ void EmoBoyEditor::paint (juce::Graphics& g)
     g.fillAll (juce::Colours::black);
     if (background.isValid())
         g.drawImage (background, getLocalBounds().toFloat());
+}
+
+void EmoBoyEditor::beginTextEntry (FaderOverlay& fader)
+{
+    // One shared editor, created on demand and torn down once committed -
+    // this is the only text that ever appears on the panel, and only for
+    // as long as someone is actively typing a value in.
+    valueEditor = std::make_unique<juce::Label>();
+    auto* editor = valueEditor.get();
+
+    editor->setText (juce::String (fader.getValue(), 2), juce::dontSendNotification);
+    editor->setJustificationType (juce::Justification::centred);
+    editor->setColour (juce::Label::backgroundColourId, juce::Colours::black.withAlpha (0.85f));
+    editor->setColour (juce::Label::textColourId, juce::Colour (0xffe8579f));
+    editor->setColour (juce::Label::outlineColourId, juce::Colour (0xffe8579f));
+    editor->setColour (juce::TextEditor::highlightColourId, juce::Colour (0xffe8579f).withAlpha (0.4f));
+
+    constexpr int w = 72, h = 22;
+    editor->setBounds (fader.getBounds().getCentreX() - w / 2, fader.getBounds().getCentreY() - h / 2, w, h);
+    addAndMakeVisible (editor);
+
+    editor->onEditorHide = [this, &fader]
+    {
+        if (valueEditor != nullptr)
+        {
+            const float typed = valueEditor->getText().retainCharacters ("0123456789.-").getFloatValue();
+            fader.setValue (juce::jlimit ((float) fader.getMinimum(), (float) fader.getMaximum(), typed),
+                             juce::sendNotificationSync);
+            removeChildComponent (valueEditor.get());
+            valueEditor.reset();
+        }
+    };
+
+    editor->setEditable (true, true, false);
+    editor->showEditor();
+    if (auto* ed = editor->getCurrentTextEditor())
+        ed->selectAll();
 }
 
 void EmoBoyEditor::resized()

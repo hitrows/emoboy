@@ -8,7 +8,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
     // ---- main panel ------------------------------------------------------
     params.push_back (std::make_unique<AudioParameterFloat> (
         ParameterID { Param::pitch, 1 }, "Pitch",
-        NormalisableRange<float> (-12.0f, 12.0f, 0.01f), 0.0f,
+        NormalisableRange<float> (-12.0f, 12.0f, 1.0f), 0.0f,
         AudioParameterFloatAttributes().withLabel ("st")));
 
     params.push_back (std::make_unique<AudioParameterFloat> (

@@ -5,6 +5,7 @@
 #include "dsp/PitchFormantEngine.h"
 #include "dsp/PitchDetector.h"
 #include "dsp/Drive.h"
+#include "dsp/AutoGain.h"
 #if EMOBOY_NERD_FEATURES
 #include "dsp/Modulation.h"
 #endif
@@ -79,6 +80,7 @@ private:
     ModMatrix modMatrix;
 #endif
     std::vector<Drive> driveStages; // one per channel
+    AutoGain autoGain;
 
     // Dry path delay compensation, matched sample-for-sample to
     // engine.getLatencySamples() so Mix < 100% doesn't comb-filter.

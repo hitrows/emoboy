@@ -11,6 +11,9 @@
 // 4 continuous parameters implemented so far (Pitch/Formant/Drive/Mix) are
 // exposed - no labels anywhere, by explicit request. Link/Mode/Robot Note
 // still exist and work at their defaults, just not shown here.
+//
+// Double-clicking any fader opens a small numeric entry box (added 0.1.4) -
+// the only "text on the panel" that exists, and only while actively typing.
 // ---------------------------------------------------------------------------
 class EmoBoyEditor : public juce::AudioProcessorEditor
 {
@@ -24,13 +27,18 @@ public:
 private:
     // A juce::Slider with all default LookAndFeel drawing suppressed -
     // paint() is fully overridden, so only the cap sprite this class draws
-    // itself ever appears. Mouse/keyboard interaction is unchanged,
-    // inherited from Slider as normal.
+    // itself ever appears. Mouse/keyboard interaction (drag, scroll,
+    // keyboard nudge) is unchanged, inherited from Slider as normal;
+    // double-click is hooked via onDoubleClick so the owning editor can
+    // pop up a shared text-entry box sized wider than this narrow strip.
     class FaderOverlay : public juce::Slider
     {
     public:
         explicit FaderOverlay (const juce::Image& capImage);
         void paint (juce::Graphics&) override;
+        void mouseDoubleClick (const juce::MouseEvent&) override;
+
+        std::function<void()> onDoubleClick;
 
     private:
         const juce::Image& cap;
@@ -42,6 +50,12 @@ private:
 
     FaderOverlay pitchFader, formantFader, driveFader, mixFader;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> pitchAttachment, formantAttachment, driveAttachment, mixAttachment;
+
+    // Created on demand by beginTextEntry(), destroyed once the value is
+    // committed - not a permanent fixture, so it never counts as a label
+    // sitting on the panel.
+    std::unique_ptr<juce::Label> valueEditor;
+    void beginTextEntry (FaderOverlay& fader);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EmoBoyEditor)
 };

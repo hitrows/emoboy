@@ -9,6 +9,78 @@ This was an autonomous session per the brief in
 `~/Downloads/logic-demo-brief-for-claude-code.md` — no check-ins, decisions
 made and documented here for the user to review and correct.
 
+## 2026-08-20: 0.1.4 - user feedback: pitch step, Drive rescale, auto gain, type-in values
+
+User's read after actually listening: **the Pitch/Formant engine beats Vocal
+Bender** ("вокал бендер делает какой-то синтезированный голос, а наш супер
+крут" - Vocal Bender sounds synthesized, ours doesn't). Strong validation of
+the STFT phase-vocoder + cepstral-split approach from `PitchFormantEngine` -
+worth remembering if a future session is ever tempted to second-guess that
+architecture before TD-PSOLA lands. Formant and Drive both praised too.
+Four concrete asks came with it:
+
+1. **Pitch fader steps by 1 semitone, not 0.01.** `Parameters.cpp`:
+   `NormalisableRange<float> (-12.0f, 12.0f, 1.0f)`. Formant is untouched -
+   stays continuous, per "фейдер форманты... шикарен" (don't fix what
+   isn't broken). JUCE's `SliderParameterAttachment` copies the
+   parameter's `NormalisableRange` (interval included) onto the `Slider`
+   automatically, and `Slider::setValue` snaps through
+   `NormalisableRange::snapToLegalValue` before it ever reaches the
+   parameter - confirmed by reading the JUCE source rather than assumed,
+   since this also had to work correctly through the new double-click
+   text entry (below), not just mouse drag.
+
+2. **Drive rescaled**: what used to be the sound at 100% is now at 50%;
+   100% pushes twice as far. `Drive::processSample`'s `amount` now runs
+   0-2 instead of 0-1 (`PluginProcessor.cpp`: `driveAmount = (drivePercent
+   / 100.0f) * 2.0f`). One deliberate exception inside `Drive.h`: the
+   final dry/wet crossfade clamps its own copy of `amount` to a max of 1
+   (`blendAmount`) rather than letting it extrapolate past the fully-wet
+   shaped signal (2×output − x territory, which overshoots the tanh
+   shaper's own bound instead of driving harder through it) - every other
+   stage (pre-emphasis boost, drive gain, bias, de-emphasis blend) uses
+   the full, unclamped 0-2 amount, which is what actually delivers "twice
+   as much" character at the top of the range. At the new 50% mark this
+   reproduces the pre-rescale 100% output exactly (every term evaluates
+   identically at amount=1 either way) - not audited by ear (can't), but
+   verified by inspection that the formulas are algebraically identical
+   at that one point.
+
+3. **New: automatic makeup gain**, always on, after Drive and the pitch/
+   formant engine but before Mix - `Source/dsp/AutoGain.h`. Measures a
+   ~300ms RMS envelope of both the wet (post-effects) and dry (already
+   delay-compensated) signal and applies a smoothed correction gain
+   (±15dB clamp, ~80ms smoothing) so turning up Drive/Pitch/Formant
+   changes character, not perceived loudness - Mix then stays "how much
+   character" instead of secretly also being a volume knob. No bypass
+   parameter exists yet. **Verified numerically** (`tools/preview.cpp`,
+   `checkAutoGain()`) rather than assumed: a 220Hz tone through
+   pitch=0/+7/-7 combined with drive=0/25/50/100 all landed within
+   **0.09 dB** of the input's RMS after settling past latency. Cheap
+   insurance this session's "measure, don't assume" habit was worth
+   keeping even under time pressure.
+
+4. **Double-click any fader to type an exact value** (a mid-session
+   addition to this same request). `FaderOverlay` gained an
+   `onDoubleClick` callback; `EmoBoyEditor::beginTextEntry()` creates a
+   `juce::Label` on demand, sized wider than the narrow fader hit-box and
+   added as a child of the *editor*, not the fader itself (so it isn't
+   clipped to the fader's ~24px-wide hit-box), pre-filled with the
+   current value, auto-selected for immediate typing, and torn down via
+   `Label::onEditorHide` once committed - the only text that ever appears
+   on the panel, and only while someone is actively typing. **Not
+   interactively tested** - no generic mouse/keyboard automation is
+   available for an arbitrary macOS app in this session (only a browser
+   pane and the iOS Simulator), so this was verified by reading the JUCE
+   `Slider`/`Label` source for the exact mechanics (`showEditor()`
+   requires an existing `valueBox`, which only exists when the text-box
+   style isn't `NoTextBox` - worked around by using a separate, editor-
+   owned `Label` instead of trying to repurpose the slider's own hidden
+   text box) rather than by actually clicking it. Worth the user
+   double-checking this one directly.
+
+Version bumped to 0.1.4. Pushed to `github.com/hitrows/emoboy`.
+
 ## 2026-08-20: 0.1.3 - real fader-cap art, zero labels
 
 User supplied proper layered assets in `pics/`: `bg-clean.png` (background

@@ -81,6 +81,8 @@ void EmoBoyProcessor::prepareToPlay (double sampleRate, int /*samplesPerBlock*/)
     for (auto& d : driveStages)
         d.prepare (sampleRate);
 
+    autoGain.prepare (sampleRate);
+
     dryDelaySamples = engine.getLatencySamples();
     dryDelayBuffer.setSize (numChannels, juce::jmax (1, dryDelaySamples));
     dryDelayBuffer.clear();
@@ -253,7 +255,11 @@ void EmoBoyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
 #endif
     mixPercent = juce::jlimit (0.0f, 100.0f, mixPercent);
     drivePercent = juce::jlimit (0.0f, 100.0f, drivePercent);
-    const float driveAmount = drivePercent / 100.0f;
+    // 0-2 internally: the old 0-100% mapped straight to Drive::processSample's
+    // 0-1 range; the knob's top half now pushes past that (2026-08-20 rescale,
+    // see Drive.h) - fader at 50% reproduces the pre-rescale 100% sound
+    // exactly, 100% is twice as far again.
+    const float driveAmount = (drivePercent / 100.0f) * 2.0f;
 
     // ---- dry path: delay to match the engine's analysis latency --------
     juce::AudioBuffer<float> dryBuffer;
@@ -286,6 +292,18 @@ void EmoBoyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         auto* wet = buffer.getWritePointer (c);
         for (int i = 0; i < numSamples; ++i)
             wet[i] = drv.processSample (wet[i], driveAmount);
+    }
+
+    // ---- auto gain: match the wet signal's loudness back to the dry ----
+    // reference, after every effect but before Mix - see AutoGain.h.
+    {
+        float* wetPtrs[8];
+        const float* dryPtrs[8];
+        const int wetChans = juce::jmin (numChannels, 8);
+        const int dryChans = juce::jmin (dryBuffer.getNumChannels(), 8);
+        for (int c = 0; c < wetChans; ++c) wetPtrs[c] = buffer.getWritePointer (c);
+        for (int c = 0; c < dryChans; ++c) dryPtrs[c] = dryBuffer.getReadPointer (c);
+        autoGain.process (wetPtrs, wetChans, dryPtrs, dryChans, numSamples);
     }
 
     // ---- mix --------------------------------------------------------------
