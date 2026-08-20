@@ -9,6 +9,26 @@ This was an autonomous session per the brief in
 `~/Downloads/logic-demo-brief-for-claude-code.md` — no check-ins, decisions
 made and documented here for the user to review and correct.
 
+## 2026-08-20: 0.1.9 - HITROWS glow moved to its own asset file
+
+User reorganised the source layers: reverted `pics/"light transp.png"`
+back to footswitch-glows-only (its pre-0.1.8 state - no HITROWS in it
+anymore), and split the wordmark glow into its own dedicated
+`pics/hitrows.png`. Re-cropped `Resources/hitrowsglow.png` from that new
+file (native bounds 130,130 to 440,240 - measured via alpha bounding box,
+which came out tighter than the old crop from the shared sheet: 310x110
+vs. 365x115, no "EMO BOY" bleed this time) and re-checked the composite
+over `bg-clean.png` before use, same as every other glow sprite in this
+project. `Resources/robotglow.png` and `bypassglow.png` are untouched -
+the reverted shared sheet matches what they were already cropped from.
+
+No logic changes - `GlowToggleButton`, the 30Hz timer sync, and
+`! isBypassed` all carry over unchanged from 0.1.8. Re-ran the same
+`tools/preview.cpp` bypassed/non-bypassed snapshots to confirm the new
+crop still lands correctly with no bleed into the neighbouring "1" button.
+
+Version bumped to 0.1.9. Pushed to `github.com/hitrows/emoboy`.
+
 ## 2026-08-20: 0.1.8 - HITROWS wordmark lights up when active
 
 User updated `pics/"light transp.png"` again, adding a glow variant of the

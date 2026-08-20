@@ -94,10 +94,13 @@ namespace
     constexpr int kBypassGlowX = 815, kBypassGlowY = 315, kBypassGlowW = 180, kBypassGlowH = 110;
     juce::Rectangle<int> bypassGlowBounds() { return scaledNativeRect ({ kBypassGlowX, kBypassGlowY, kBypassGlowW, kBypassGlowH }); }
 
-    // HITROWS wordmark glow sprite bounds, same measurement approach
-    // (alpha bounding box of the cropped sprite, cross-checked visually
-    // against a composite over bg-clean.png before use).
-    constexpr int kHitrowsGlowX = 130, kHitrowsGlowY = 130, kHitrowsGlowW = 365, kHitrowsGlowH = 115;
+    // HITROWS wordmark glow sprite bounds. Originally cropped from the
+    // shared "light transp.png" sheet (0.1.8); the user split it into its
+    // own dedicated pics/hitrows.png afterwards and reverted the shared
+    // sheet, so this crop comes from that separate file now - same
+    // measurement approach (alpha bounding box, cross-checked visually as
+    // a composite over bg-clean.png before use), different source file.
+    constexpr int kHitrowsGlowX = 130, kHitrowsGlowY = 130, kHitrowsGlowW = 310, kHitrowsGlowH = 110;
     juce::Rectangle<int> hitrowsGlowBounds() { return scaledNativeRect ({ kHitrowsGlowX, kHitrowsGlowY, kHitrowsGlowW, kHitrowsGlowH }); }
 
     const juce::Colour kKnobTickColour { 190, 120, 150 }; // matches the fader caps' own inlaid stripe tone - user's pick over the brighter branding pink
