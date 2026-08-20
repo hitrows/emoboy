@@ -9,6 +9,30 @@ This was an autonomous session per the brief in
 `~/Downloads/logic-demo-brief-for-claude-code.md` — no check-ins, decisions
 made and documented here for the user to review and correct.
 
+## 2026-08-20: 0.1.8 - HITROWS wordmark lights up when active
+
+User updated `pics/"light transp.png"` again, adding a glow variant of the
+HITROWS wordmark to the same sheet the footswitch glows live on. Asked for
+it to light up whenever the plugin is doing something (i.e. not
+bypassed), dark when BYPASS is engaged - a status indicator, not a
+control.
+
+Cropped the wordmark glow out (native bounds 130,130 to 495,245 - checked
+visually as a composite over `bg-clean.png` first, same as the two
+footswitch glows, to make sure the crop didn't bleed into the "1" button's
+own glow sitting right next to it) into `Resources/hitrowsglow.png`.
+Reused `GlowToggleButton` for the overlay machinery even though this
+isn't a real button - `setInterceptsMouseClicks (false, false)` so it
+never swallows a click meant for something underneath. Lit state driven
+by the same 30Hz timer as the two footswitches: `hitrowsGlow.setLit
+(! isBypassed)`.
+
+Verified via `tools/preview.cpp`'s existing snapshot machinery: added a
+`bypass=1` snapshot and visually confirmed the wordmark is lit in every
+existing (non-bypassed) snapshot and dark in the new bypassed one.
+
+Version bumped to 0.1.8. Pushed to `github.com/hitrows/emoboy`.
+
 ## 2026-08-20: 0.1.7 - Robot Note octave labels fixed to match Logic Pro
 
 User asked to check the note-naming algorithm specifically against Logic

@@ -100,6 +100,12 @@ private:
     GlowToggleButton robotButton;
     GlowToggleButton bypassButton;
 
+    // The HITROWS wordmark's lit look - purely a status indicator (no
+    // click handler, clicks pass through), lit whenever the plugin is
+    // *not* bypassed. Reuses GlowToggleButton for the image-overlay
+    // machinery even though nothing here is actually a button.
+    GlowToggleButton hitrowsGlow;
+
     // Standard (unstyled) juce::AlertWindow text-entry dialog - user's ask
     // (2026-08-20): a native-feeling system dialog, not a custom popup
     // drawn on the panel.

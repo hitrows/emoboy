@@ -94,6 +94,12 @@ namespace
     constexpr int kBypassGlowX = 815, kBypassGlowY = 315, kBypassGlowW = 180, kBypassGlowH = 110;
     juce::Rectangle<int> bypassGlowBounds() { return scaledNativeRect ({ kBypassGlowX, kBypassGlowY, kBypassGlowW, kBypassGlowH }); }
 
+    // HITROWS wordmark glow sprite bounds, same measurement approach
+    // (alpha bounding box of the cropped sprite, cross-checked visually
+    // against a composite over bg-clean.png before use).
+    constexpr int kHitrowsGlowX = 130, kHitrowsGlowY = 130, kHitrowsGlowW = 365, kHitrowsGlowH = 115;
+    juce::Rectangle<int> hitrowsGlowBounds() { return scaledNativeRect ({ kHitrowsGlowX, kHitrowsGlowY, kHitrowsGlowW, kHitrowsGlowH }); }
+
     const juce::Colour kKnobTickColour { 190, 120, 150 }; // matches the fader caps' own inlaid stripe tone - user's pick over the brighter branding pink
 }
 
@@ -220,6 +226,10 @@ EmoBoyEditor::EmoBoyEditor (EmoBoyProcessor& p)
         bypassParam->setValueNotifyingHost (bypassParam->getValue() > 0.5f ? 0.0f : 1.0f);
     };
 
+    hitrowsGlow.setGlowImage (juce::ImageCache::getFromMemory (BinaryData::hitrowsglow_png, BinaryData::hitrowsglow_pngSize));
+    hitrowsGlow.setInterceptsMouseClicks (false, false); // status indicator only, not a control
+    addAndMakeVisible (hitrowsGlow);
+
     startTimerHz (30);
 
     const int nativeW = background.getWidth() > 0 ? background.getWidth() : 1074;
@@ -234,6 +244,7 @@ void EmoBoyEditor::timerCallback()
 
     const bool isBypassed = proc.apvts.getRawParameterValue (Param::bypass)->load() > 0.5f;
     bypassButton.setLit (isBypassed);
+    hitrowsGlow.setLit (! isBypassed);
 }
 
 void EmoBoyEditor::paint (juce::Graphics& g)
@@ -298,4 +309,5 @@ void EmoBoyEditor::resized()
     robotKnob.setBounds (knobBounds());
     robotButton.setBounds (robotGlowBounds());
     bypassButton.setBounds (bypassGlowBounds());
+    hitrowsGlow.setBounds (hitrowsGlowBounds());
 }

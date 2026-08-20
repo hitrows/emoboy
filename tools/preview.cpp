@@ -182,6 +182,16 @@ int main()
     {
         EmoBoyProcessor proc;
         proc.prepareToPlay (44100.0, 512);
+        setParam (proc, Param::bypass, 1.0f);
+        // HITROWS wordmark should be dark here (only unlit look from the
+        // background photo, no glow overlay), unlike every other snapshot
+        // in this file where bypass=0 and it should be lit - 2026-08-20.
+        snapshot (proc, "preview_bypassed.png");
+    }
+
+    {
+        EmoBoyProcessor proc;
+        proc.prepareToPlay (44100.0, 512);
         setParam (proc, Param::mode, (float) (int) Param::Mode::Robot);
         setParam (proc, Param::robotNote, 0.0f); // index 0, bottom of the list -> 7 o'clock (rework, 2026-08-20)
         snapshot (proc, "preview_robot_noteLow.png");
