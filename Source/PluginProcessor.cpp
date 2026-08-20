@@ -15,7 +15,16 @@ namespace
     constexpr float kDriveModRangePercent = 50.0f;
 #endif
 
-    constexpr int kRobotNoteBase = 36; // index 0 ("C1" in the selector, Logic's octave numbering) = MIDI note 36
+    // index 0 ("C2" in the selector) = MIDI note 48. 2026-08-20: this is
+    // Logic Pro's own note numbering (middle C = C3 = MIDI 60), not the
+    // ASA/scientific-pitch-notation convention (middle C = C4) the first
+    // build used (which put "C2" at MIDI 36, a full octave low against
+    // what Logic itself calls C2) - the user asked for the *actual pitch*
+    // to match Logic's C2-B3, not just the printed label, so this constant
+    // moved, not only the display strings in Parameters.cpp. Index 12 -
+    // the knob's 12-o'clock rest position - now lands exactly on Logic's
+    // C3 = MIDI 60 = middle C, which is a clean, sensible reference point.
+    constexpr int kRobotNoteBase = 48;
 }
 
 EmoBoyProcessor::EmoBoyProcessor()

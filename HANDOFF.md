@@ -9,6 +9,27 @@ This was an autonomous session per the brief in
 `~/Downloads/logic-demo-brief-for-claude-code.md` — no check-ins, decisions
 made and documented here for the user to review and correct.
 
+## 2026-08-20: 0.1.10 - Robot Note range actually moved to Logic's C2-B3 (not just relabelled)
+
+Follow-up correction to 0.1.7/0.1.9. The user's real ask, stated
+precisely on the second try: not "put the labels back to C2..B3" (which
+0.1.9 already did, but on the *same* MIDI 36-59 range as before 0.1.7 -
+just cosmetic, the actual pitch never moved) but **"actually make Robot
+work on these notes"** - the true pitches Logic itself calls C2 through
+B3.
+
+Since Logic's convention is middle C = C3 = MIDI 60, Logic's C2 is
+MIDI 48, not MIDI 36. `kRobotNoteBase` in `PluginProcessor.cpp` moved
+from 36 to 48. Combined with the 0.1.9 label range (octave 2..3), index 0
+now really is Logic's C2 (130.8 Hz), and - a happy consequence - index 12,
+the knob's 12-o'clock rest position, lands exactly on **Logic's C3 =
+MIDI 60 = middle C (261.6 Hz)**, about as clean a reference point as this
+could have. Verified the three anchor frequencies directly (130.81 /
+261.63 / 493.88 Hz for C2 / C3 / B3) against the standard MIDI-to-Hz
+formula rather than trusting the constant change by eye.
+
+Version bumped to 0.1.10. Pushed to `github.com/hitrows/emoboy`.
+
 ## 2026-08-20: 0.1.9 - HITROWS glow moved to its own asset file
 
 User reorganised the source layers: reverted `pics/"light transp.png"`

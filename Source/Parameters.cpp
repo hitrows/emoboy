@@ -26,20 +26,17 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
     {
         StringArray notes;
         static const char* names[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
-        // Octave numbers here follow Logic Pro's own convention (middle C
-        // = C3), not the ASA/scientific-pitch-notation convention (middle
-        // C = C4) - one octave apart. 2026-08-20: measured/confirmed by
-        // testing in Logic itself, where the labels were reading one
-        // octave high (this code's old "C3" sounded like Logic's own
-        // "C2" - the underlying MIDI notes were always correct, only the
-        // printed name was off). kRobotNoteBase in PluginProcessor.cpp is
-        // unaffected - it maps index to MIDI note number, which has no
-        // octave-naming ambiguity; only these display strings do.
-        for (int octave = 1; octave <= 2; ++octave)
+        // Octave numbers: back to C2..B3 (2026-08-20, explicit user
+        // request, reverting the 0.1.7 shift to Logic Pro's own
+        // convention). kRobotNoteBase in PluginProcessor.cpp is
+        // unaffected either way - it maps index to MIDI note number
+        // directly, which has no octave-naming ambiguity; only these
+        // display strings do.
+        for (int octave = 2; octave <= 3; ++octave)
             for (auto* n : names)
                 notes.add (String (n) + String (octave));
-        // Default index 12 = C2 (Logic's numbering), the knob's 12-o'clock
-        // reference note (2026-08-20 rework) - a fresh instance should
+        // Default index 12 = C3, the knob's 12-o'clock reference note
+        // (2026-08-20 rework) - a fresh instance should
         // rest with the pointer straight up, not rotated all the way to
         // one side.
         params.push_back (std::make_unique<AudioParameterChoice> (
