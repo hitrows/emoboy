@@ -112,6 +112,13 @@ namespace
     constexpr int kModeGlowW[3] = { 140, 145, 140 };
     juce::Rectangle<int> modeGlowBounds (int i) { return scaledNativeRect ({ kModeGlowX[i], kModeGlowY, kModeGlowW[i], kModeGlowH }); }
 
+    // PEAK lamp glow bounds, from the user's dedicated pics/lamp.png -
+    // alpha bounding box (98,199)-(139,240), cropped with a little padding
+    // (85,186)-(152,253) and cross-checked visually before use, same as
+    // every other glow sprite.
+    constexpr int kLampGlowX = 85, kLampGlowY = 186, kLampGlowW = 67, kLampGlowH = 67;
+    juce::Rectangle<int> lampGlowBounds() { return scaledNativeRect ({ kLampGlowX, kLampGlowY, kLampGlowW, kLampGlowH }); }
+
     const juce::Colour kKnobTickColour { 190, 120, 150 }; // matches the fader caps' own inlaid stripe tone - user's pick over the brighter branding pink
 }
 
@@ -264,6 +271,10 @@ EmoBoyEditor::EmoBoyEditor (EmoBoyProcessor& p)
         }
     }
 
+    peakLamp.setGlowImage (juce::ImageCache::getFromMemory (BinaryData::lampglow_png, BinaryData::lampglow_pngSize));
+    peakLamp.setInterceptsMouseClicks (false, false); // status indicator only, not a control
+    addAndMakeVisible (peakLamp);
+
     startTimerHz (30);
 
     const int nativeW = background.getWidth() > 0 ? background.getWidth() : 1074;
@@ -284,6 +295,8 @@ void EmoBoyEditor::timerCallback()
     const bool isBypassed = proc.apvts.getRawParameterValue (Param::bypass)->load() > 0.5f;
     bypassButton.setLit (isBypassed);
     hitrowsGlow.setLit (! isBypassed);
+
+    peakLamp.setLit (proc.isPeakLedOn());
 }
 
 void EmoBoyEditor::paint (juce::Graphics& g)
@@ -352,4 +365,6 @@ void EmoBoyEditor::resized()
 
     for (int i = 0; i < 3; ++i)
         modeButtons[(size_t) i].setBounds (modeGlowBounds (i));
+
+    peakLamp.setBounds (lampGlowBounds());
 }

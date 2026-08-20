@@ -15,7 +15,7 @@ set(PLUGIN_CODE         Emob)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Minimum macOS version")
 set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "Build architectures")
 
-project(${PROJECT_NAME} VERSION 0.1.11)
+project(${PROJECT_NAME} VERSION 0.1.12)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -108,7 +108,8 @@ juce_add_binary_data(EmoBoyAssets
         Resources/hitrowsglow.png
         Resources/mode1glow.png
         Resources/mode2glow.png
-        Resources/mode3glow.png)
+        Resources/mode3glow.png
+        Resources/lampglow.png)
 
 set_target_properties(EmoBoyAssets PROPERTIES
     POSITION_INDEPENDENT_CODE TRUE)

@@ -25,6 +25,12 @@ namespace
     // the knob's 12-o'clock rest position - now lands exactly on Logic's
     // C3 = MIDI 60 = middle C, which is a clean, sensible reference point.
     constexpr int kRobotNoteBase = 48;
+
+    // PEAK lamp threshold and hold time - a first guess (2026-08-20, not
+    // audited by ear), meant to react to normal singing level, not just
+    // the loudest transients. -18 dBFS linear; easy to retune here.
+    constexpr float kPeakThreshold = 0.126f;
+    constexpr float kPeakHoldMs = 120.0f;
 }
 
 EmoBoyProcessor::EmoBoyProcessor()
@@ -102,6 +108,10 @@ void EmoBoyProcessor::prepareToPlay (double sampleRate, int /*samplesPerBlock*/)
     ptSmoothedSemitones = 0.0f;
 #endif
     heldMidiNote = -1;
+
+    peakHoldSamples = (int) (kPeakHoldMs * 0.001 * sampleRate);
+    peakHoldSamplesRemaining = 0;
+    peakLedOn.store (false, std::memory_order_relaxed);
 }
 
 bool EmoBoyProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -195,6 +205,25 @@ void EmoBoyProcessor::updateModulationSources (const juce::AudioBuffer<float>& i
 void EmoBoyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals noDenormals;
+
+    // PEAK lamp: measured on the raw input, before bypass, so it still
+    // works as a signal-present monitor even with BYPASS engaged.
+    {
+        float peak = 0.0f;
+        for (int c = 0; c < buffer.getNumChannels(); ++c)
+        {
+            const auto* data = buffer.getReadPointer (c);
+            for (int i = 0; i < buffer.getNumSamples(); ++i)
+                peak = juce::jmax (peak, std::abs (data[i]));
+        }
+
+        if (peak >= kPeakThreshold)
+            peakHoldSamplesRemaining = peakHoldSamples;
+        else
+            peakHoldSamplesRemaining = juce::jmax (0, peakHoldSamplesRemaining - buffer.getNumSamples());
+
+        peakLedOn.store (peakHoldSamplesRemaining > 0, std::memory_order_relaxed);
+    }
 
     // Hard bypass: the BYPASS footswitch, wired straight through - leaves
     // the buffer completely untouched, no engine/Drive/auto-gain work at

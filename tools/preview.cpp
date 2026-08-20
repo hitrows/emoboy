@@ -143,6 +143,37 @@ namespace
             maxDiff = juce::jmax (maxDiff, (double) std::abs (output[(size_t) i] - tone[(size_t) i]));
         printf ("[bypass] max |output - input| = %.8f (want exactly 0.0)\n", maxDiff);
     }
+
+    // Confirms the PEAK lamp actually snaps on for a loud input and stays
+    // off for silence/quiet input - 2026-08-20.
+    void checkPeakLamp()
+    {
+        constexpr double sr = 44100.0;
+        constexpr int blockSize = 512;
+
+        auto runFor = [&] (float amplitude, int numSamples) -> bool
+        {
+            EmoBoyProcessor proc;
+            proc.prepareToPlay (sr, blockSize);
+            juce::AudioBuffer<float> block (1, blockSize);
+            juce::MidiBuffer midi;
+            int pos = 0;
+            while (pos < numSamples)
+            {
+                const int bs = juce::jmin (blockSize, numSamples - pos);
+                block.setSize (1, bs, false, false, true);
+                for (int i = 0; i < bs; ++i)
+                    block.setSample (0, i, amplitude * std::sin (2.0 * juce::MathConstants<double>::pi * 220.0 * (pos + i) / sr));
+                proc.processBlock (block, midi);
+                pos += bs;
+            }
+            return proc.isPeakLedOn();
+        };
+
+        printf ("[peak lamp] loud (0.5) input -> lit=%d (want 1)\n", (int) runFor (0.5f, 4096));
+        printf ("[peak lamp] silent input -> lit=%d (want 0)\n", (int) runFor (0.0f, 4096));
+        printf ("[peak lamp] quiet (0.01) input -> lit=%d (want 0)\n", (int) runFor (0.01f, 4096));
+    }
 }
 
 int main()
@@ -150,6 +181,7 @@ int main()
     juce::ScopedJuceInitialiser_GUI initialiser;
 
     checkAutoGain();
+    checkPeakLamp();
 
     {
         EmoBoyProcessor proc;
@@ -157,6 +189,17 @@ int main()
         // Defaults: pitch=0, formant=0, drive=0, mix=100 - sanity check the
         // resting position first.
         snapshot (proc, "preview_default.png");
+    }
+
+    {
+        EmoBoyProcessor proc;
+        proc.prepareToPlay (44100.0, 512);
+        juce::AudioBuffer<float> block (1, 512);
+        juce::MidiBuffer midi;
+        for (int i = 0; i < 512; ++i)
+            block.setSample (0, i, 0.5f * std::sin (2.0 * juce::MathConstants<double>::pi * 220.0 * i / 44100.0));
+        proc.processBlock (block, midi); // pump one loud block so the PEAK lamp is lit for the snapshot
+        snapshot (proc, "preview_peak_lit.png");
     }
 
     {

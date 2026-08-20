@@ -107,6 +107,11 @@ private:
     // doesn't change the code, just which crop gets used.
     std::array<GlowToggleButton, 3> modeButtons;
 
+    // The PEAK lamp - status indicator only (no click handler), lit
+    // whenever EmoBoyProcessor::isPeakLedOn() is true. A hard on/off snap,
+    // not a fade - see PluginProcessor's peak-hold detector.
+    GlowToggleButton peakLamp;
+
     // The HITROWS wordmark's lit look - purely a status indicator (no
     // click handler, clicks pass through), lit whenever the plugin is
     // *not* bypassed. Reuses GlowToggleButton for the image-overlay

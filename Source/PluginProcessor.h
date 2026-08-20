@@ -41,6 +41,13 @@ public:
 
     juce::AudioProcessorParameter* getBypassParameter() const override { return apvts.getParameter (Param::bypass); }
 
+    // The PEAK lamp's state, written on the audio thread every block,
+    // read on the message thread at 30Hz by the editor - hence atomic.
+    // Not a smoothed level meter: a fast/instant on the moment the input
+    // crosses a threshold, held for a short time, then a hard snap off -
+    // "jumps between 0 and 100", the user's own words, not a fade.
+    bool isPeakLedOn() const noexcept { return peakLedOn.load (std::memory_order_relaxed); }
+
     juce::AudioProcessorValueTreeState apvts;
 
 private:
@@ -99,6 +106,12 @@ private:
 
     // Currently-held MIDI note for Robot mode, -1 if none held.
     int heldMidiNote = -1;
+
+    // PEAK lamp: input-level peak-hold detector, audio-thread-only state
+    // plus the atomic the UI actually reads.
+    std::atomic<bool> peakLedOn { false };
+    int peakHoldSamplesRemaining = 0;
+    int peakHoldSamples = 0; // set from sample rate in prepareToPlay
 
     double currentSampleRate = 44100.0;
 

@@ -9,6 +9,48 @@ This was an autonomous session per the brief in
 `~/Downloads/logic-demo-brief-for-claude-code.md` — no check-ins, decisions
 made and documented here for the user to review and correct.
 
+## 2026-08-20: 0.1.12 - PEAK lamp (input-level peak-hold indicator)
+
+The small LED above "VOID" (labelled "PEAK" in the original, pre-label-
+stripped reference photo) now actually does something. User first asked
+whether this was worth building at all - recommended yes (it's literally
+what the hardware art already implies), and specifically recommended a
+**hard on/off snap** (fast attack, brief hold, instant off) over a smooth
+level-proportional fade, since the user's own framing ("opacity прыгал с 0
+до 100") described a jump, and that's also how real analog gear's PEAK
+LEDs behave - matched the naming in the source art rather than building a
+continuous VU meter. User initially deferred the whole feature ("забили
+на лампочку пока"), then came back with a dedicated `pics/lamp.png` glow
+sprite mid-session.
+
+**DSP** (`PluginProcessor.h/.cpp`): peak measured on the *raw input*,
+before the BYPASS early-return, so the lamp still works as a signal-
+present monitor with BYPASS engaged. `abs(sample) >= kPeakThreshold`
+(0.126 linear, ~-18 dBFS - a first guess tuned to react to normal singing
+level, not just clip-level transients, not audited by ear) re-arms a
+120ms hold counter each block; the counter counts down by
+`buffer.getNumSamples()` per block and the lamp is lit exactly while it's
+still positive - a real snap, not a decay curve. State lives in an
+`std::atomic<bool> peakLedOn`, written on the audio thread, read by
+`EmoBoyProcessor::isPeakLedOn()` from the editor's existing 30Hz timer -
+same cross-thread pattern as everything else in this UI, no new
+synchronisation primitive.
+
+**Asset**: `Resources/lampglow.png`, cropped from `pics/lamp.png` (native
+bounds 85,186 to 152,253, padded around the sprite's own alpha bounding
+box) and composited over `bg-clean.png` to confirm placement before use.
+`GlowToggleButton` reused again (non-interactive, like the HITROWS glow).
+
+**Verified before calling it done** (`tools/preview.cpp`): `checkPeakLamp()`
+confirms `isPeakLedOn()` is true after a loud (0.5 amplitude) block, false
+after silence, and - importantly - **false at a quiet 0.01 amplitude**
+too, confirming the threshold isn't so low it's effectively always on.
+Also added a snapshot that pumps one loud block through the processor
+before rendering, to visually confirm the lamp lights at the correct
+position (not just that the boolean flips).
+
+Version bumped to 0.1.12. Pushed to `github.com/hitrows/emoboy`.
+
 ## 2026-08-20: 0.1.11 - Mode select footswitches (1/2/3 = Transpose/Quantize/Robot)
 
 Mode is now reachable from the UI via three real footswitches, not just
