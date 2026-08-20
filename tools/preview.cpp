@@ -103,6 +103,46 @@ namespace
                     c.label, inputRms, outputRms, errorDb);
         }
     }
+
+    // Confirms the BYPASS footswitch actually leaves the signal untouched
+    // (bit-identical, not just "close") - 2026-08-20.
+    void checkBypass()
+    {
+        constexpr double sr = 44100.0;
+        constexpr int blockSize = 512;
+        constexpr int n = 4096;
+
+        std::vector<float> tone ((size_t) n);
+        for (int i = 0; i < n; ++i)
+            tone[(size_t) i] = 0.4f * std::sin (2.0 * juce::MathConstants<double>::pi * 220.0 * i / sr);
+
+        EmoBoyProcessor proc;
+        proc.prepareToPlay (sr, blockSize);
+        setParam (proc, Param::bypass, 1.0f);
+        // Heavy settings that would obviously change the signal if bypass
+        // weren't actually skipping processing.
+        setParam (proc, Param::pitch, 12.0f);
+        setParam (proc, Param::drive, 100.0f);
+
+        std::vector<float> output ((size_t) n, 0.0f);
+        juce::AudioBuffer<float> block (1, blockSize);
+        juce::MidiBuffer midi;
+        int pos = 0;
+        while (pos < n)
+        {
+            const int bs = juce::jmin (blockSize, n - pos);
+            block.setSize (1, bs, false, false, true);
+            block.copyFrom (0, 0, tone.data() + pos, bs);
+            proc.processBlock (block, midi);
+            std::copy (block.getReadPointer (0), block.getReadPointer (0) + bs, output.begin() + pos);
+            pos += bs;
+        }
+
+        double maxDiff = 0.0;
+        for (int i = 0; i < n; ++i)
+            maxDiff = juce::jmax (maxDiff, (double) std::abs (output[(size_t) i] - tone[(size_t) i]));
+        printf ("[bypass] max |output - input| = %.8f (want exactly 0.0)\n", maxDiff);
+    }
 }
 
 int main()
@@ -143,16 +183,16 @@ int main()
         EmoBoyProcessor proc;
         proc.prepareToPlay (44100.0, 512);
         setParam (proc, Param::mode, (float) (int) Param::Mode::Robot);
-        setParam (proc, Param::robotNote, 0.0f); // C2, index 0 -> 7 o'clock
-        snapshot (proc, "preview_robot_noteC.png");
+        setParam (proc, Param::robotNote, 0.0f); // C2, index 0 -> 7 o'clock (rework, 2026-08-20)
+        snapshot (proc, "preview_robot_noteC2.png");
     }
 
     {
         EmoBoyProcessor proc;
         proc.prepareToPlay (44100.0, 512);
         setParam (proc, Param::mode, (float) (int) Param::Mode::Robot);
-        setParam (proc, Param::robotNote, 11.0f); // 12 o'clock-ish, halfway
-        snapshot (proc, "preview_robot_noteMid.png");
+        // index 12 = C3 left untouched -> should be default already, straight up (12 o'clock)
+        snapshot (proc, "preview_robot_noteC3_default.png");
     }
 
     {
@@ -160,8 +200,10 @@ int main()
         proc.prepareToPlay (44100.0, 512);
         setParam (proc, Param::mode, (float) (int) Param::Mode::Robot);
         setParam (proc, Param::robotNote, 23.0f); // B3, index 23 -> 5 o'clock
-        snapshot (proc, "preview_robot_noteB.png");
+        snapshot (proc, "preview_robot_noteB3.png");
     }
+
+    checkBypass();
 
     return 0;
 }

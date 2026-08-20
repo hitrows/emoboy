@@ -39,6 +39,8 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
 
+    juce::AudioProcessorParameter* getBypassParameter() const override { return apvts.getParameter (Param::bypass); }
+
     juce::AudioProcessorValueTreeState apvts;
 
 private:
@@ -51,6 +53,7 @@ private:
     std::atomic<float>* pRobotNote = nullptr;
     std::atomic<float>* pDrive = nullptr;
     std::atomic<float>* pMix = nullptr;
+    std::atomic<float>* pBypass = nullptr;
 
 #if EMOBOY_NERD_FEATURES
     std::atomic<float>* pMod1Rate = nullptr;

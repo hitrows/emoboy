@@ -31,6 +31,7 @@ EmoBoyProcessor::EmoBoyProcessor()
     pRobotNote = apvts.getRawParameterValue (Param::robotNote);
     pDrive = apvts.getRawParameterValue (Param::drive);
     pMix = apvts.getRawParameterValue (Param::mix);
+    pBypass = apvts.getRawParameterValue (Param::bypass);
 
 #if EMOBOY_NERD_FEATURES
     pMod1Rate = apvts.getRawParameterValue (Param::mod1Rate);
@@ -185,6 +186,17 @@ void EmoBoyProcessor::updateModulationSources (const juce::AudioBuffer<float>& i
 void EmoBoyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi)
 {
     juce::ScopedNoDenormals noDenormals;
+
+    // Hard bypass: the BYPASS footswitch, wired straight through - leaves
+    // the buffer completely untouched, no engine/Drive/auto-gain work at
+    // all. Simple and matches "плагин ничего не делает" literally; does
+    // NOT attempt latency-compensated "smart" bypass, so toggling it
+    // mid-playback can shift timing by the engine's ~46ms latency versus
+    // what the host already compensated for - acceptable for this demo,
+    // worth revisiting if bypass automation ever needs to be click-free.
+    if (pBypass->load() > 0.5f)
+        return;
+
     const int numSamples = buffer.getNumSamples();
     const int numChannels = buffer.getNumChannels();
 

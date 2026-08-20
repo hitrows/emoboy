@@ -17,7 +17,8 @@
 //
 // 0.1.5 adds the Robot Note knob and the Robot toggle button/backlight -
 // Mode is now reachable from the UI (toggles Robot <-> Transpose), still
-// with no Quantize access.
+// with no Quantize access. Also adds the BYPASS footswitch (hard bypass,
+// wired to getBypassParameter()).
 // ---------------------------------------------------------------------------
 class EmoBoyEditor : public juce::AudioProcessorEditor,
                       private juce::Timer
@@ -53,21 +54,28 @@ private:
     // suppressed the same way; paint() draws only a thin tick at the value's
     // angle, in the muted tone matching the fader caps' own inlaid stripe
     // (chosen over the brighter branding pink - user's call, 2026-08-20).
+    // Double-click opens a note-picker popup (onDoubleClick), same pattern
+    // as FaderOverlay's text entry.
     class RobotKnob : public juce::Slider
     {
     public:
         RobotKnob();
         void paint (juce::Graphics&) override;
+        void mouseDoubleClick (const juce::MouseEvent&) override;
+
+        std::function<void()> onDoubleClick;
     };
 
-    // The ROBOT footswitch. Its unlit look is baked into the background
-    // photo; this just overlays the user-supplied pre-blurred/expanded
-    // glow sprite (pics/"light transp.png", cropped to just this button)
-    // when Mode == Robot, and toggles Mode <-> Transpose on click.
-    class RobotButton : public juce::Button
+    // A footswitch-style button whose unlit look is baked into the
+    // background photo; this just overlays a pre-blurred/expanded glow
+    // sprite (cropped from pics/"light transp.png") when told to, and
+    // reports clicks via juce::Button::onClick as normal. Reused for both
+    // the ROBOT and BYPASS footswitches - only the glow image, position,
+    // and click handler differ between them.
+    class GlowToggleButton : public juce::Button
     {
     public:
-        RobotButton();
+        GlowToggleButton();
         void setGlowImage (const juce::Image& glowImage);
         void setLit (bool shouldBeLit);
 
@@ -77,7 +85,7 @@ private:
         bool lit = false;
     };
 
-    void timerCallback() override; // polls Mode to keep the backlight in sync (incl. host automation/state loads, not just clicks here)
+    void timerCallback() override; // polls Mode/Bypass to keep both backlights in sync (incl. host automation/state loads, not just clicks here)
 
     EmoBoyProcessor& proc;
     juce::Image background;
@@ -89,13 +97,17 @@ private:
     RobotKnob robotKnob;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> robotNoteAttachment;
 
-    RobotButton robotButton;
+    GlowToggleButton robotButton;
+    GlowToggleButton bypassButton;
 
-    // Created on demand by beginTextEntry(), destroyed once the value is
-    // committed - not a permanent fixture, so it never counts as a label
-    // sitting on the panel.
-    std::unique_ptr<juce::Label> valueEditor;
+    // Standard (unstyled) juce::AlertWindow text-entry dialog - user's ask
+    // (2026-08-20): a native-feeling system dialog, not a custom popup
+    // drawn on the panel.
     void beginTextEntry (FaderOverlay& fader);
+
+    // Standard (unstyled) juce::PopupMenu note picker for the Robot Note
+    // knob - user's ask, deliberately not themed to match the panel.
+    void showNotePicker();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (EmoBoyEditor)
 };

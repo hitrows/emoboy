@@ -56,14 +56,26 @@ namespace
     constexpr int kKnobRadius = 28;
     juce::Rectangle<int> knobBounds() { return scaledNativeRect ({ kKnobCentreX - kKnobRadius, kKnobCentreY - kKnobRadius, kKnobRadius * 2, kKnobRadius * 2 }); }
 
-    // Standard ~300 degree pot sweep, measured in the clockwise-from-12
-    // convention: 7 o'clock (-150deg) to 5 o'clock (+150deg), through 12.
-    // 2026-08-20, confirmed with the user: clockwise = higher note, so
-    // 7 o'clock/minimum-rotation = C (index 0), 5 o'clock/maximum = B
-    // (index 23) - i.e. no inversion needed, this is JUCE's own default
-    // rotary-slider angle convention.
-    constexpr float kKnobStartAngle = -2.6180f;
-    constexpr float kKnobEndAngle = 2.6180f;
+    // Robot Note angle mapping, reworked 2026-08-20: 12 o'clock (angle 0)
+    // is the reference note C3 (index 12 in the 24-entry C2..B3 list),
+    // not one end of the sweep. Clockwise raises the note a semitone at a
+    // time up to B3 at 5 o'clock (+150deg, 11 steps); counter-clockwise
+    // lowers it down to C2 at 7 o'clock (-150deg, 12 steps) - the long way
+    // through 12, same ~300 degree sweep as before. The two halves get
+    // very slightly different angular steps (150/11 vs 150/12, ~9% apart)
+    // because C3 isn't exactly centred in a 24-note C2-B3 range - a
+    // consequence of the user's explicit endpoints, not a bug.
+    constexpr int kRobotNoteCentreIndex = 12; // C3
+    constexpr int kRobotNoteMaxIndex = 23;    // B3
+    constexpr float kKnobSweepHalf = 2.6180f; // 150 degrees, one side
+
+    float angleForRobotNoteIndex (int index)
+    {
+        const int offset = index - kRobotNoteCentreIndex;
+        if (offset >= 0)
+            return kKnobSweepHalf * ((float) offset / (float) (kRobotNoteMaxIndex - kRobotNoteCentreIndex));
+        return -kKnobSweepHalf * ((float) -offset / (float) kRobotNoteCentreIndex);
+    }
 
     // Glow sprite bounds within pics/"light transp.png" (cropped into
     // Resources/robotglow.png with a padding margin so its soft falloff
@@ -73,6 +85,12 @@ namespace
     // to hit, and doesn't overlap the knob above it.
     constexpr int kRobotGlowX = 120, kRobotGlowY = 575, kRobotGlowW = 180, kRobotGlowH = 120;
     juce::Rectangle<int> robotGlowBounds() { return scaledNativeRect ({ kRobotGlowX, kRobotGlowY, kRobotGlowW, kRobotGlowH }); }
+
+    // BYPASS footswitch glow sprite bounds, same measurement approach as
+    // the Robot glow above (alpha bounding box of the cropped sprite,
+    // padded so the falloff isn't clipped).
+    constexpr int kBypassGlowX = 815, kBypassGlowY = 315, kBypassGlowW = 180, kBypassGlowH = 110;
+    juce::Rectangle<int> bypassGlowBounds() { return scaledNativeRect ({ kBypassGlowX, kBypassGlowY, kBypassGlowW, kBypassGlowH }); }
 
     const juce::Colour kKnobTickColour { 190, 120, 150 }; // matches the fader caps' own inlaid stripe tone - user's pick over the brighter branding pink
 }
@@ -120,9 +138,7 @@ EmoBoyEditor::RobotKnob::RobotKnob()
 void EmoBoyEditor::RobotKnob::paint (juce::Graphics& g)
 {
     const auto bounds = getLocalBounds().toFloat();
-    const double range = getMaximum() - getMinimum();
-    const float proportion = range > 0.0 ? (float) ((getValue() - getMinimum()) / range) : 0.0f;
-    const float angle = kKnobStartAngle + proportion * (kKnobEndAngle - kKnobStartAngle);
+    const float angle = angleForRobotNoteIndex ((int) std::lround (getValue()));
 
     const auto centre = bounds.getCentre();
     const float radius = bounds.getWidth() * 0.5f;
@@ -136,11 +152,17 @@ void EmoBoyEditor::RobotKnob::paint (juce::Graphics& g)
     g.drawLine ({ p1, p2 }, juce::jmax (2.0f, radius * 0.09f));
 }
 
-EmoBoyEditor::RobotButton::RobotButton() : juce::Button ({}) {}
+void EmoBoyEditor::RobotKnob::mouseDoubleClick (const juce::MouseEvent&)
+{
+    if (onDoubleClick)
+        onDoubleClick();
+}
 
-void EmoBoyEditor::RobotButton::setGlowImage (const juce::Image& glowImage) { glow = glowImage; }
+EmoBoyEditor::GlowToggleButton::GlowToggleButton() : juce::Button ({}) {}
 
-void EmoBoyEditor::RobotButton::setLit (bool shouldBeLit)
+void EmoBoyEditor::GlowToggleButton::setGlowImage (const juce::Image& glowImage) { glow = glowImage; }
+
+void EmoBoyEditor::GlowToggleButton::setLit (bool shouldBeLit)
 {
     if (lit != shouldBeLit)
     {
@@ -149,7 +171,7 @@ void EmoBoyEditor::RobotButton::setLit (bool shouldBeLit)
     }
 }
 
-void EmoBoyEditor::RobotButton::paintButton (juce::Graphics& g, bool, bool)
+void EmoBoyEditor::GlowToggleButton::paintButton (juce::Graphics& g, bool, bool)
 {
     if (lit && glow.isValid())
         g.drawImage (glow, getLocalBounds().toFloat());
@@ -176,6 +198,7 @@ EmoBoyEditor::EmoBoyEditor (EmoBoyProcessor& p)
 
     addAndMakeVisible (robotKnob);
     robotNoteAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (proc.apvts, Param::robotNote, robotKnob);
+    robotKnob.onDoubleClick = [this] { showNotePicker(); };
 
     robotButton.setGlowImage (juce::ImageCache::getFromMemory (BinaryData::robotglow_png, BinaryData::robotglow_pngSize));
     addAndMakeVisible (robotButton);
@@ -185,6 +208,14 @@ EmoBoyEditor::EmoBoyEditor (EmoBoyProcessor& p)
         const bool isRobot = (int) std::round (modeParam->convertFrom0to1 (modeParam->getValue())) == (int) Param::Mode::Robot;
         const auto newMode = isRobot ? Param::Mode::Transpose : Param::Mode::Robot;
         modeParam->setValueNotifyingHost (modeParam->convertTo0to1 ((float) (int) newMode));
+    };
+
+    bypassButton.setGlowImage (juce::ImageCache::getFromMemory (BinaryData::bypassglow_png, BinaryData::bypassglow_pngSize));
+    addAndMakeVisible (bypassButton);
+    bypassButton.onClick = [this]
+    {
+        auto* bypassParam = proc.apvts.getParameter (Param::bypass);
+        bypassParam->setValueNotifyingHost (bypassParam->getValue() > 0.5f ? 0.0f : 1.0f);
     };
 
     startTimerHz (30);
@@ -198,6 +229,9 @@ void EmoBoyEditor::timerCallback()
 {
     const bool isRobot = (int) proc.apvts.getRawParameterValue (Param::mode)->load() == (int) Param::Mode::Robot;
     robotButton.setLit (isRobot);
+
+    const bool isBypassed = proc.apvts.getRawParameterValue (Param::bypass)->load() > 0.5f;
+    bypassButton.setLit (isBypassed);
 }
 
 void EmoBoyEditor::paint (juce::Graphics& g)
@@ -209,39 +243,47 @@ void EmoBoyEditor::paint (juce::Graphics& g)
 
 void EmoBoyEditor::beginTextEntry (FaderOverlay& fader)
 {
-    // One shared editor, created on demand and torn down once committed -
-    // this is the only text that ever appears on the panel, and only for
-    // as long as someone is actively typing a value in.
-    valueEditor = std::make_unique<juce::Label>();
-    auto* editor = valueEditor.get();
+    auto* aw = new juce::AlertWindow ("Enter value", {}, juce::AlertWindow::NoIcon);
+    aw->addTextEditor ("value", juce::String (fader.getValue(), 2));
+    aw->addButton ("OK", 1, juce::KeyPress (juce::KeyPress::returnKey));
+    aw->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
 
-    editor->setText (juce::String (fader.getValue(), 2), juce::dontSendNotification);
-    editor->setJustificationType (juce::Justification::centred);
-    editor->setColour (juce::Label::backgroundColourId, juce::Colours::black.withAlpha (0.85f));
-    editor->setColour (juce::Label::textColourId, juce::Colour (0xffe8579f));
-    editor->setColour (juce::Label::outlineColourId, juce::Colour (0xffe8579f));
-    editor->setColour (juce::TextEditor::highlightColourId, juce::Colour (0xffe8579f).withAlpha (0.4f));
-
-    constexpr int w = 72, h = 22;
-    editor->setBounds (fader.getBounds().getCentreX() - w / 2, fader.getBounds().getCentreY() - h / 2, w, h);
-    addAndMakeVisible (editor);
-
-    editor->onEditorHide = [this, &fader]
-    {
-        if (valueEditor != nullptr)
-        {
-            const float typed = valueEditor->getText().retainCharacters ("0123456789.-").getFloatValue();
-            fader.setValue (juce::jlimit ((float) fader.getMinimum(), (float) fader.getMaximum(), typed),
-                             juce::sendNotificationSync);
-            removeChildComponent (valueEditor.get());
-            valueEditor.reset();
-        }
-    };
-
-    editor->setEditable (true, true, false);
-    editor->showEditor();
-    if (auto* ed = editor->getCurrentTextEditor())
+    if (auto* ed = aw->getTextEditor ("value"))
         ed->selectAll();
+
+    juce::Component::SafePointer<EmoBoyEditor> safeThis (this);
+    aw->enterModalState (true, juce::ModalCallbackFunction::create (
+        [safeThis, &fader, aw] (int result)
+        {
+            if (safeThis == nullptr)
+                return;
+            if (result == 1)
+            {
+                const float typed = aw->getTextEditorContents ("value").getFloatValue();
+                fader.setValue (juce::jlimit ((float) fader.getMinimum(), (float) fader.getMaximum(), typed),
+                                 juce::sendNotificationSync);
+            }
+        }), true); // deleteWhenDismissed
+}
+
+void EmoBoyEditor::showNotePicker()
+{
+    auto* choiceParam = dynamic_cast<juce::AudioParameterChoice*> (proc.apvts.getParameter (Param::robotNote));
+    if (choiceParam == nullptr)
+        return;
+
+    const int currentIndex = choiceParam->getIndex();
+
+    juce::PopupMenu menu; // deliberately the plain, unstyled default look - user's ask
+    for (int i = 0; i < choiceParam->choices.size(); ++i)
+        menu.addItem (i + 1, choiceParam->choices[i], true, i == currentIndex);
+
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (robotKnob),
+        [this, choiceParam] (int result)
+        {
+            if (result > 0)
+                choiceParam->setValueNotifyingHost (choiceParam->convertTo0to1 ((float) (result - 1)));
+        });
 }
 
 void EmoBoyEditor::resized()
@@ -253,4 +295,5 @@ void EmoBoyEditor::resized()
 
     robotKnob.setBounds (knobBounds());
     robotButton.setBounds (robotGlowBounds());
+    bypassButton.setBounds (bypassGlowBounds());
 }

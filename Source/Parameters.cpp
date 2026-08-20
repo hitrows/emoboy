@@ -29,8 +29,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
         for (int octave = 2; octave <= 3; ++octave)
             for (auto* n : names)
                 notes.add (String (n) + String (octave));
+        // Default index 12 = C3, the knob's 12-o'clock reference note
+        // (2026-08-20 rework) - a fresh instance should rest with the
+        // pointer straight up, not rotated all the way to one side.
         params.push_back (std::make_unique<AudioParameterChoice> (
-            ParameterID { Param::robotNote, 1 }, "Robot Note", notes, 0)); // C2 default
+            ParameterID { Param::robotNote, 1 }, "Robot Note", notes, 12));
     }
 
     params.push_back (std::make_unique<AudioParameterFloat> (
@@ -42,6 +45,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
         ParameterID { Param::mix, 1 }, "Mix",
         NormalisableRange<float> (0.0f, 100.0f, 0.1f), 100.0f,
         AudioParameterFloatAttributes().withLabel ("%")));
+
+    params.push_back (std::make_unique<AudioParameterBool> (
+        ParameterID { Param::bypass, 1 }, "Bypass", false));
 
 #if EMOBOY_NERD_FEATURES
     // ---- modulation sources ------------------------------------------------

@@ -9,6 +9,79 @@ This was an autonomous session per the brief in
 `~/Downloads/logic-demo-brief-for-claude-code.md` — no check-ins, decisions
 made and documented here for the user to review and correct.
 
+## 2026-08-20: 0.1.6 - Robot Note knob reworked around C3, native dialogs, BYPASS footswitch
+
+Three follow-ups in one go, same session as 0.1.5:
+
+**1. Robot Note knob remapped around a centre reference note.** Original
+0.1.5 mapping was linear index-0-to-23 across the full sweep. New ask: 12
+o'clock = C3 (index 12) as a fixed reference, clockwise raises pitch a
+semitone at a time to B3 at 5 o'clock (11 steps), counter-clockwise lowers
+it to C2 at 7 o'clock (12 steps) - same ~300 degree sweep, just re-anchored
+at the centre instead of one end. `angleForRobotNoteIndex()` in
+`PluginEditor.cpp` replaced the old single linear formula with two
+half-range ones. **Default parameter value changed from index 0 (C2) to
+index 12 (C3)** (`Parameters.cpp`) - a fresh instance should rest with the
+pointer straight up, not rotated to one side, which the old default would
+have done under the new mapping. The two halves get very slightly
+different angular steps (150 degrees over 11 steps vs. over 12) since C3
+isn't exactly centred in a 24-note C2-B3 range - inherent to the user's
+explicit endpoints, not a bug, and not perceptually significant (~9%
+difference in step size between the halves).
+
+Worth a note on process: the user's literal wording for this rework
+("5 часов это C3... до B3 на 5 часов... до С2 на 5 часов") had the same
+kind of typo as the 0.1.5 rotation-direction question - two different
+endpoints both written as "5 часов". Given the entire session's
+established convention (5 and 7 o'clock are always the two *different*
+sweep ends), corrected it to 7 o'clock for the C2 end without stopping to
+ask again - high-confidence pattern match, not a guess from nothing.
+
+**2. Both popups reverted to plain/native JUCE dialogs, not custom-styled
+panel overlays.** User's explicit ask, after seeing a Vocal Bender
+reference screenshot for inspiration and then deciding against matching
+its dark rounded-corner styling:
+   - Robot Note knob double-click now opens a plain `juce::PopupMenu`
+     (`EmoBoyEditor::showNotePicker()`) listing all 24 notes with a
+     checkmark on the current one - no custom LookAndFeel colours applied.
+   - Fader double-click text entry was rebuilt from the 0.1.4 custom
+     `juce::Label`-based inline editor to a `juce::AlertWindow` with a text
+     field and OK/Cancel buttons (`EmoBoyEditor::beginTextEntry()`) - a
+     real modal dialog instead of a panel overlay. Guarded with a
+     `Component::SafePointer<EmoBoyEditor>` in the modal callback since an
+     `AlertWindow` is an independent top-level window, not a child
+     component - unlike the old `Label` (destroyed automatically with its
+     parent), it could otherwise outlive the editor and touch a dangling
+     `fader` reference if the plugin window were closed while the dialog
+     was still open.
+
+**3. New BYPASS footswitch** (`Source/Parameters.h/.cpp`: `bypass` bool
+param, wired via `EmoBoyProcessor::getBypassParameter()`, same pattern as
+"Not Sure"). **Hard bypass** - `processBlock` returns immediately, before
+any engine/Drive/auto-gain work, leaving the buffer completely untouched.
+Does *not* attempt latency-compensated "smart" bypass, so toggling it
+mid-playback can shift timing by the engine's ~46ms latency versus what
+the host already compensated for - acceptable for this demo, worth
+revisiting if bypass automation ever needs to be click-free.
+
+Reused the Robot footswitch's glow-overlay component for this, renamed
+from `RobotButton` to the more accurate `GlowToggleButton` since it now
+backs two different buttons (only the glow sprite, position, and click
+handler differ). New `Resources/bypassglow.png`, cropped from the same
+`pics/"light transp.png"` sheet the Robot glow came from - this one
+happens to glow **red** in the source art rather than pink, left as-is
+since it reads naturally as an "off/bypassed" indicator color.
+
+**Verified before calling it done** (`tools/preview.cpp`):
+- Robot Note angle: snapshots at index 0 (C2), 12 (C3, left at its new
+  default), and 23 (B3) land at 7, 12, and 5 o'clock respectively.
+- Bypass: fed a 220Hz tone through `processBlock` with `bypass=1` and
+  Pitch/Drive both pushed hard - `checkBypass()` confirms the output is
+  **bit-identical** to the input (max sample difference exactly 0.0), not
+  just "close".
+
+Version bumped to 0.1.6. Pushed to `github.com/hitrows/emoboy`.
+
 ## 2026-08-20: 0.1.5 - Robot Note knob + Robot footswitch, first UI element beyond the 4 faders
 
 User supplied 3 more layered assets in `pics/`: an updated `bg-clean.png`
