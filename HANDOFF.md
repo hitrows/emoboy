@@ -9,6 +9,42 @@ This was an autonomous session per the brief in
 `~/Downloads/logic-demo-brief-for-claude-code.md` — no check-ins, decisions
 made and documented here for the user to review and correct.
 
+## 2026-08-20: 0.1.11 - Mode select footswitches (1/2/3 = Transpose/Quantize/Robot)
+
+Mode is now reachable from the UI via three real footswitches, not just
+the ROBOT toggle. User pointed to `pics/123.png` (bg-clean with "1"/"2"/"3"
+printed on the **bottom** row of blank buttons - explicitly not the
+labelled "1/2/3/4" row above it, confirmed twice) as the reference for
+which physical buttons these are.
+
+**Shown a composite preview before writing any code**, per the user's
+explicit ask: cropped each button's glow from `pics/"light transp.png"`
+(bottom row - confirmed by eye these glow only along the bottom edge, no
+full box outline like ROBOT/BYPASS have) and composited button 1's lit
+look onto `bg-clean.png` to confirm the style before wiring anything up.
+User confirmed with "да ты все правильно понял".
+
+Bounds (native, all row y = 343-412): button 1 x 300-440, button 2 x
+425-570, button 3 x 555-695 - measured off `123.png` directly rather than
+assumed from the icon row above (the columns are aligned, but this row's
+buttons aren't identically sized to the ones above).
+
+`Source/PluginEditor.h/.cpp`: `modeButtons` is a `std::array<
+GlowToggleButton, 3>`, index 0/1/2 wired to `Param::Mode::Transpose/
+Quantize/Robot`. Each `onClick` sets the mode directly (not a toggle -
+unlike the ROBOT footswitch, which still toggles Robot<->Transpose and
+stays lit whenever Mode==Robot, so it and mode button "3" light up
+together). `timerCallback()` (30Hz, same as every other backlight in this
+build) keeps all three in sync with the current parameter value. New
+`Resources/mode1glow.png` / `mode2glow.png` / `mode3glow.png`.
+
+Verified via `tools/preview.cpp`: added a Quantize-mode snapshot,
+confirmed against the existing default (Transpose) and Robot-mode
+snapshots that exactly the right one of the three buttons lights up for
+each mode, no bleed onto its neighbours.
+
+Version bumped to 0.1.11. Pushed to `github.com/hitrows/emoboy`.
+
 ## 2026-08-20: 0.1.10 - Robot Note range actually moved to Logic's C2-B3 (not just relabelled)
 
 Follow-up correction to 0.1.7/0.1.9. The user's real ask, stated

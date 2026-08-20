@@ -192,6 +192,13 @@ int main()
     {
         EmoBoyProcessor proc;
         proc.prepareToPlay (44100.0, 512);
+        setParam (proc, Param::mode, (float) (int) Param::Mode::Quantize);
+        snapshot (proc, "preview_mode_quantize.png"); // mode button "2" should be lit
+    }
+
+    {
+        EmoBoyProcessor proc;
+        proc.prepareToPlay (44100.0, 512);
         setParam (proc, Param::mode, (float) (int) Param::Mode::Robot);
         setParam (proc, Param::robotNote, 0.0f); // index 0, bottom of the list -> 7 o'clock (rework, 2026-08-20)
         snapshot (proc, "preview_robot_noteLow.png");

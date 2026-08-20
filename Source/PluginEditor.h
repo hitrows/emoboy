@@ -2,6 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
+#include <array>
 
 // ---------------------------------------------------------------------------
 // 0.1.3 pedal skin: user-supplied clean background (no text labels, no cap
@@ -99,6 +100,12 @@ private:
 
     GlowToggleButton robotButton;
     GlowToggleButton bypassButton;
+
+    // Mode select footswitches, bottom row: "1"=Transpose, "2"=Quantize,
+    // "3"=Robot (2026-08-20). Unlike ROBOT/BYPASS these only glow along
+    // their bottom edge in the source art, not a full box outline -
+    // doesn't change the code, just which crop gets used.
+    std::array<GlowToggleButton, 3> modeButtons;
 
     // The HITROWS wordmark's lit look - purely a status indicator (no
     // click handler, clicks pass through), lit whenever the plugin is

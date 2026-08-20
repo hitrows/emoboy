@@ -103,6 +103,15 @@ namespace
     constexpr int kHitrowsGlowX = 130, kHitrowsGlowY = 130, kHitrowsGlowW = 310, kHitrowsGlowH = 110;
     juce::Rectangle<int> hitrowsGlowBounds() { return scaledNativeRect ({ kHitrowsGlowX, kHitrowsGlowY, kHitrowsGlowW, kHitrowsGlowH }); }
 
+    // Mode footswitches (bottom row, "1"/"2"/"3" = Transpose/Quantize/
+    // Robot), bottom-edge-only glow crops - bounds measured off each
+    // sprite's alpha channel, cross-checked visually as a composite over
+    // bg-clean.png (shown to the user for approval) before use.
+    constexpr int kModeGlowY = 343, kModeGlowH = 69;
+    constexpr int kModeGlowX[3] = { 300, 425, 555 };
+    constexpr int kModeGlowW[3] = { 140, 145, 140 };
+    juce::Rectangle<int> modeGlowBounds (int i) { return scaledNativeRect ({ kModeGlowX[i], kModeGlowY, kModeGlowW[i], kModeGlowH }); }
+
     const juce::Colour kKnobTickColour { 190, 120, 150 }; // matches the fader caps' own inlaid stripe tone - user's pick over the brighter branding pink
 }
 
@@ -233,6 +242,28 @@ EmoBoyEditor::EmoBoyEditor (EmoBoyProcessor& p)
     hitrowsGlow.setInterceptsMouseClicks (false, false); // status indicator only, not a control
     addAndMakeVisible (hitrowsGlow);
 
+    {
+        static const struct { const char* data; int size; } modeGlowData[3] = {
+            { BinaryData::mode1glow_png, BinaryData::mode1glow_pngSize },
+            { BinaryData::mode2glow_png, BinaryData::mode2glow_pngSize },
+            { BinaryData::mode3glow_png, BinaryData::mode3glow_pngSize },
+        };
+        static const Param::Mode modeForButton[3] = { Param::Mode::Transpose, Param::Mode::Quantize, Param::Mode::Robot };
+
+        for (int i = 0; i < 3; ++i)
+        {
+            auto& button = modeButtons[(size_t) i];
+            button.setGlowImage (juce::ImageCache::getFromMemory (modeGlowData[i].data, modeGlowData[i].size));
+            addAndMakeVisible (button);
+            const auto targetMode = modeForButton[i];
+            button.onClick = [this, targetMode]
+            {
+                auto* modeParam = proc.apvts.getParameter (Param::mode);
+                modeParam->setValueNotifyingHost (modeParam->convertTo0to1 ((float) (int) targetMode));
+            };
+        }
+    }
+
     startTimerHz (30);
 
     const int nativeW = background.getWidth() > 0 ? background.getWidth() : 1074;
@@ -242,8 +273,13 @@ EmoBoyEditor::EmoBoyEditor (EmoBoyProcessor& p)
 
 void EmoBoyEditor::timerCallback()
 {
-    const bool isRobot = (int) proc.apvts.getRawParameterValue (Param::mode)->load() == (int) Param::Mode::Robot;
+    const int currentMode = (int) proc.apvts.getRawParameterValue (Param::mode)->load();
+    const bool isRobot = currentMode == (int) Param::Mode::Robot;
     robotButton.setLit (isRobot);
+
+    static const Param::Mode modeForButton[3] = { Param::Mode::Transpose, Param::Mode::Quantize, Param::Mode::Robot };
+    for (int i = 0; i < 3; ++i)
+        modeButtons[(size_t) i].setLit (currentMode == (int) modeForButton[i]);
 
     const bool isBypassed = proc.apvts.getRawParameterValue (Param::bypass)->load() > 0.5f;
     bypassButton.setLit (isBypassed);
@@ -313,4 +349,7 @@ void EmoBoyEditor::resized()
     robotButton.setBounds (robotGlowBounds());
     bypassButton.setBounds (bypassGlowBounds());
     hitrowsGlow.setBounds (hitrowsGlowBounds());
+
+    for (int i = 0; i < 3; ++i)
+        modeButtons[(size_t) i].setBounds (modeGlowBounds (i));
 }
