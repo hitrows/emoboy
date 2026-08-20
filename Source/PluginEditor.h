@@ -118,6 +118,16 @@ private:
     // machinery even though nothing here is actually a button.
     GlowToggleButton hitrowsGlow;
 
+    // Preset footswitches, top row "1"/"2"/"3"/"4" (2026-08-20) - one-shot
+    // triggers, not a persistent parameter, so "lit" here just means
+    // "most recently clicked", set directly in the click handler rather
+    // than polled from a parameter in timerCallback like everything else.
+    std::array<GlowToggleButton, 4> presetButtons;
+    void applyPreset (int index);
+
+    struct Preset { float pitch, formant, drive, mix; Param::Mode mode; int robotNoteIndex; };
+    static const std::array<Preset, 4> presets;
+
     // Standard (unstyled) juce::AlertWindow text-entry dialog - user's ask
     // (2026-08-20): a native-feeling system dialog, not a custom popup
     // drawn on the panel.

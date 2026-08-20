@@ -119,8 +119,33 @@ namespace
     constexpr int kLampGlowX = 85, kLampGlowY = 186, kLampGlowW = 67, kLampGlowH = 67;
     juce::Rectangle<int> lampGlowBounds() { return scaledNativeRect ({ kLampGlowX, kLampGlowY, kLampGlowW, kLampGlowH }); }
 
+    // Preset footswitches (top row, "1"/"2"/"3"/"4" - full box-outline
+    // glow, unlike the bottom row's under-glow-only style). Bounds
+    // measured off bg-clean.png directly for the button rects, then
+    // cross-checked visually as a composite over bg-clean.png for the
+    // glow crop before use, same as every other sprite in this file.
+    constexpr int kPresetGlowY = 200, kPresetGlowH = 86;
+    constexpr int kPresetGlowX[4] = { 299, 408, 538, 668 };
+    constexpr int kPresetGlowW[4] = { 140, 168, 163, 158 };
+    juce::Rectangle<int> presetGlowBounds (int i) { return scaledNativeRect ({ kPresetGlowX[i], kPresetGlowY, kPresetGlowW[i], kPresetGlowH }); }
+
     const juce::Colour kKnobTickColour { 190, 120, 150 }; // matches the fader caps' own inlaid stripe tone - user's pick over the brighter branding pink
 }
+
+// Four presets for the top-row footswitches (2026-08-20, user's ask: "4
+// killer presets"). Named after the panel's own graffiti art (VOID/CRY/
+// LOST are printed on the pedal; ROBOT exercises the mode the pink
+// footswitch/knob are for) even though no name is ever shown in this
+// no-labels build - just for orientation here and in conversation.
+// Not tuned against real vocal material by ear (can't) - a reasonable
+// first pass per character, easy to retune once actually heard.
+const std::array<EmoBoyEditor::Preset, 4> EmoBoyEditor::presets { {
+    // pitch, formant, drive,  mix,   mode,                    robotNoteIndex
+    { -3.0f,  -3.0f,   15.0f, 100.0f, Param::Mode::Transpose,  12 }, // "Cry"   - subtle sad pitch-down double
+    { -12.0f, -9.0f,   65.0f, 100.0f, Param::Mode::Transpose,  12 }, // "Void"  - full octave down, heavy drive, monster voice
+    {  5.0f,   6.0f,   10.0f,  80.0f, Param::Mode::Transpose,  12 }, // "Lost"  - airy pitched-up, mostly wet
+    {  0.0f,   2.0f,   35.0f, 100.0f, Param::Mode::Robot,      12 }, // "Robot" - flattened to middle C, moderate drive
+} };
 
 EmoBoyEditor::FaderOverlay::FaderOverlay (const juce::Image& capImageIn)
     : cap (capImageIn)
@@ -227,15 +252,15 @@ EmoBoyEditor::EmoBoyEditor (EmoBoyProcessor& p)
     robotNoteAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (proc.apvts, Param::robotNote, robotKnob);
     robotKnob.onDoubleClick = [this] { showNotePicker(); };
 
+    // Status indicator only now (2026-08-20) - lit whenever Mode==Robot,
+    // same as before, but no click handler: mode button "3" (bottom row)
+    // is the actual control now, and having two controls toggle the same
+    // parameter was flagged as a duplicate-functionality glitch by the
+    // user. setInterceptsMouseClicks(false, false) so it doesn't even
+    // show a pressable hover/down state for a click that would do nothing.
     robotButton.setGlowImage (juce::ImageCache::getFromMemory (BinaryData::robotglow_png, BinaryData::robotglow_pngSize));
+    robotButton.setInterceptsMouseClicks (false, false);
     addAndMakeVisible (robotButton);
-    robotButton.onClick = [this]
-    {
-        auto* modeParam = proc.apvts.getParameter (Param::mode);
-        const bool isRobot = (int) std::round (modeParam->convertFrom0to1 (modeParam->getValue())) == (int) Param::Mode::Robot;
-        const auto newMode = isRobot ? Param::Mode::Transpose : Param::Mode::Robot;
-        modeParam->setValueNotifyingHost (modeParam->convertTo0to1 ((float) (int) newMode));
-    };
 
     bypassButton.setGlowImage (juce::ImageCache::getFromMemory (BinaryData::bypassglow_png, BinaryData::bypassglow_pngSize));
     addAndMakeVisible (bypassButton);
@@ -274,6 +299,22 @@ EmoBoyEditor::EmoBoyEditor (EmoBoyProcessor& p)
     peakLamp.setGlowImage (juce::ImageCache::getFromMemory (BinaryData::lampglow_png, BinaryData::lampglow_pngSize));
     peakLamp.setInterceptsMouseClicks (false, false); // status indicator only, not a control
     addAndMakeVisible (peakLamp);
+
+    {
+        static const struct { const char* data; int size; } presetGlowData[4] = {
+            { BinaryData::preset1glow_png, BinaryData::preset1glow_pngSize },
+            { BinaryData::preset2glow_png, BinaryData::preset2glow_pngSize },
+            { BinaryData::preset3glow_png, BinaryData::preset3glow_pngSize },
+            { BinaryData::preset4glow_png, BinaryData::preset4glow_pngSize },
+        };
+        for (int i = 0; i < 4; ++i)
+        {
+            auto& button = presetButtons[(size_t) i];
+            button.setGlowImage (juce::ImageCache::getFromMemory (presetGlowData[i].data, presetGlowData[i].size));
+            addAndMakeVisible (button);
+            button.onClick = [this, i] { applyPreset (i); };
+        }
+    }
 
     startTimerHz (30);
 
@@ -351,6 +392,30 @@ void EmoBoyEditor::showNotePicker()
         });
 }
 
+void EmoBoyEditor::applyPreset (int index)
+{
+    const auto& p = presets[(size_t) index];
+
+    auto setNorm = [this] (const juce::String& id, float actualValue)
+    {
+        if (auto* param = proc.apvts.getParameter (id))
+            param->setValueNotifyingHost (param->convertTo0to1 (actualValue));
+    };
+
+    setNorm (Param::pitch, p.pitch);
+    setNorm (Param::formant, p.formant);
+    setNorm (Param::drive, p.drive);
+    setNorm (Param::mix, p.mix);
+    setNorm (Param::mode, (float) (int) p.mode);
+    setNorm (Param::robotNote, (float) p.robotNoteIndex);
+
+    // "Lit" here just means "most recently clicked" - presets aren't a
+    // stored parameter, so there's nothing to poll in timerCallback the
+    // way Mode/Bypass are synced. Set directly, once, here.
+    for (int i = 0; i < 4; ++i)
+        presetButtons[(size_t) i].setLit (i == index);
+}
+
 void EmoBoyEditor::resized()
 {
     pitchFader.setBounds (faderBounds (kPitchSlot));
@@ -367,4 +432,7 @@ void EmoBoyEditor::resized()
         modeButtons[(size_t) i].setBounds (modeGlowBounds (i));
 
     peakLamp.setBounds (lampGlowBounds());
+
+    for (int i = 0; i < 4; ++i)
+        presetButtons[(size_t) i].setBounds (presetGlowBounds (i));
 }

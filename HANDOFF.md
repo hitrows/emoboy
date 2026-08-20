@@ -9,6 +9,58 @@ This was an autonomous session per the brief in
 `~/Downloads/logic-demo-brief-for-claude-code.md` — no check-ins, decisions
 made and documented here for the user to review and correct.
 
+## 2026-08-21: 0.1.13 - 4 presets on the top-row footswitches, ROBOT button de-duplicated
+
+Two fixes in one:
+
+**ROBOT footswitch duplicate-functionality bug.** Once 0.1.11 added mode
+button "3" (bottom row) as a real Robot-mode control, the pink ROBOT
+footswitch (which still toggled Robot<->Transpose on click) was doing the
+exact same job as a second, redundant control - both wired to the same
+`mode` parameter, both visually lighting up together, but only one of them
+needed a click handler. Per the user's own diagnosis ("косяк... дублирует
+функционал"): `robotButton.onClick` removed entirely, plus
+`setInterceptsMouseClicks (false, false)` so it doesn't even show a
+pressable hover state for a click that would now do nothing. It's a pure
+status indicator now, same pattern as HITROWS/PEAK - still lit whenever
+Mode==Robot, driven by the same 30Hz timer as before.
+
+**4 presets on the top-row "1"/"2"/"3"/"4" footswitches** (not the bottom
+row - that's mode select). Named after the panel's own graffiti art
+(VOID/CRY/LOST are printed on the pedal) plus one that exercises Robot
+mode - not tuned against real vocal material by ear (can't), a reasonable
+first pass per character:
+
+| # | Name  | Pitch | Formant | Drive | Mix  | Mode      |
+|---|-------|-------|---------|-------|------|-----------|
+| 1 | Cry   | -3    | -3      | 15%   | 100% | Transpose |
+| 2 | Void  | -12   | -9      | 65%   | 100% | Transpose |
+| 3 | Lost  | +5    | +6      | 10%   | 80%  | Transpose |
+| 4 | Robot | -     | +2      | 35%   | 100% | Robot (note: middle C) |
+
+`EmoBoyEditor::applyPreset()` sets every relevant parameter explicitly
+(not just the ones that "matter" for that preset) so each click is fully
+deterministic regardless of prior state. Button "lit" state here isn't
+polled from a parameter like every other backlight in this build -
+presets aren't persisted state, just one-shot triggers - so `applyPreset()`
+sets the clicked button lit and the other three unlit directly, once, on
+click.
+
+Full box-outline glow crops (top row's style, distinct from the bottom
+row's under-glow-only look) measured off `bg-clean.png`/`"light
+transp.png"` and cross-checked visually as composites before use, same
+process as every other sprite. New `Resources/preset1glow.png`
+through `preset4glow.png`.
+
+**Verified via `tools/preview.cpp`**: since `applyPreset()` is private and
+`createEditor()` only exposes the base `AudioProcessorEditor*`, replicated
+the "Cry" and "Robot" presets' parameter values through the existing
+public `setParam()` path and confirmed by eye that fader positions and
+Mode-linked backlights (mode button "3" + the now-indicator-only ROBOT
+footswitch, together) land where the presets table says they should.
+
+Version bumped to 0.1.13. Pushed to `github.com/hitrows/emoboy`.
+
 ## 2026-08-20: 0.1.12 - PEAK lamp (input-level peak-hold indicator)
 
 The small LED above "VOID" (labelled "PEAK" in the original, pre-label-

@@ -212,6 +212,31 @@ int main()
         snapshot (proc, "preview_extremes.png");
     }
 
+    // Preset parameter values (2026-08-20) - EmoBoyEditor::applyPreset()
+    // isn't reachable from here (private, and createEditor() only exposes
+    // the base AudioProcessorEditor*), so this replicates what it sets
+    // via the same public parameter path, to confirm fader positions land
+    // where the presets table in PluginEditor.cpp says they should.
+    {
+        EmoBoyProcessor proc;
+        proc.prepareToPlay (44100.0, 512);
+        setParam (proc, Param::pitch, -3.0f);
+        setParam (proc, Param::formant, -3.0f);
+        setParam (proc, Param::drive, 15.0f);
+        setParam (proc, Param::mix, 100.0f);
+        snapshot (proc, "preview_preset_cry.png");
+    }
+
+    {
+        EmoBoyProcessor proc;
+        proc.prepareToPlay (44100.0, 512);
+        setParam (proc, Param::mode, (float) (int) Param::Mode::Robot);
+        setParam (proc, Param::formant, 2.0f);
+        setParam (proc, Param::drive, 35.0f);
+        setParam (proc, Param::mix, 100.0f);
+        snapshot (proc, "preview_preset_robot.png");
+    }
+
     {
         EmoBoyProcessor proc;
         proc.prepareToPlay (44100.0, 512);
