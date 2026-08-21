@@ -128,6 +128,35 @@ private:
     struct Preset { float pitch, formant, drive, mix; Param::Mode mode; int robotNoteIndex; };
     static const std::array<Preset, 4> presets;
 
+    // WRITE + 4 user-savable slots (icon row: skull/heart/star/razor,
+    // 2026-08-21). Click WRITE to arm save mode (lock lights up, all 4
+    // slot highlights clear); click a slot while armed to save the
+    // current plugin state into it (lock goes dark, that slot lights up).
+    // Click WRITE again while armed to cancel without saving. Outside
+    // write mode, clicking a slot with saved data recalls it (same
+    // highlight behaviour as the top-row presets); clicking an empty slot
+    // does nothing at all - no parameter changes, no highlight change.
+    GlowToggleButton writeButton;
+    std::array<GlowToggleButton, 4> userPresetButtons;
+    bool writeModeArmed = false;
+    int activeUserSlot = -1; // -1 = none recalled/saved yet this session
+    void onWriteClicked();
+    void onUserSlotClicked (int index);
+    void refreshUserSlotHighlights();
+
+    // The two small round indicator lamps left of the preset rows
+    // (pics/us-fuck.png, 2026-08-21) - status only, no click handler. Top
+    // lamp lit whenever a factory preset (top row) is the currently active
+    // one, bottom lamp lit whenever a user slot is; the two are always
+    // mutually exclusive, same as the two button rows they sit beside.
+    // While WRITE is armed the bottom lamp blinks instead (polled in
+    // timerCallback) to say "choose a destination slot".
+    GlowToggleButton factoryPresetLamp;
+    GlowToggleButton userPresetLamp;
+    int activeFactoryPreset = -1; // -1 = none recalled yet this session; mirrors activeUserSlot
+
+    static void setParamNormalized (EmoBoyProcessor& p, const juce::String& id, float value);
+
     // Standard (unstyled) juce::AlertWindow text-entry dialog - user's ask
     // (2026-08-20): a native-feeling system dialog, not a custom popup
     // drawn on the panel.

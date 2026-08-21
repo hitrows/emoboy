@@ -174,6 +174,50 @@ namespace
         printf ("[peak lamp] silent input -> lit=%d (want 0)\n", (int) runFor (0.0f, 4096));
         printf ("[peak lamp] quiet (0.01) input -> lit=%d (want 0)\n", (int) runFor (0.01f, 4096));
     }
+
+    // Confirms the WRITE-button user preset slots (2026-08-21) actually
+    // survive a getStateInformation -> setStateInformation round trip -
+    // the exact path a real project save/reload takes. Sets slots 0 and 2
+    // directly (as EmoBoyEditor::onUserSlotClicked would), leaves 1 and 3
+    // empty, and checks a fresh processor loading that state ends up with
+    // identical data - including the empty slots staying empty (hasData
+    // must not default to true from a missing/mis-parsed property).
+    void checkUserPresetPersistence()
+    {
+        EmoBoyProcessor writer;
+        writer.prepareToPlay (44100.0, 512);
+
+        auto& slot0 = writer.userPresets[0];
+        slot0.hasData = true;
+        slot0.pitch = 7.0f; slot0.formant = -3.0f; slot0.drive = 42.0f; slot0.mix = 80.0f;
+        slot0.mode = (int) Param::Mode::Robot; slot0.robotNoteIndex = 18;
+
+        auto& slot2 = writer.userPresets[2];
+        slot2.hasData = true;
+        slot2.pitch = -12.0f; slot2.formant = 5.0f; slot2.drive = 0.0f; slot2.mix = 100.0f;
+        slot2.mode = (int) Param::Mode::Transpose; slot2.robotNoteIndex = 3;
+
+        juce::MemoryBlock state;
+        writer.getStateInformation (state);
+
+        EmoBoyProcessor reader;
+        reader.prepareToPlay (44100.0, 512);
+        reader.setStateInformation (state.getData(), (int) state.getSize());
+
+        bool ok = true;
+        ok &= reader.userPresets[0].hasData == true
+           && reader.userPresets[0].pitch == 7.0f && reader.userPresets[0].formant == -3.0f
+           && reader.userPresets[0].drive == 42.0f && reader.userPresets[0].mix == 80.0f
+           && reader.userPresets[0].mode == (int) Param::Mode::Robot && reader.userPresets[0].robotNoteIndex == 18;
+        ok &= reader.userPresets[1].hasData == false; // never written - must stay empty
+        ok &= reader.userPresets[2].hasData == true
+           && reader.userPresets[2].pitch == -12.0f && reader.userPresets[2].formant == 5.0f
+           && reader.userPresets[2].drive == 0.0f && reader.userPresets[2].mix == 100.0f
+           && reader.userPresets[2].mode == (int) Param::Mode::Transpose && reader.userPresets[2].robotNoteIndex == 3;
+        ok &= reader.userPresets[3].hasData == false;
+
+        printf ("[user presets] round-trip through save/load state -> %s\n", ok ? "OK" : "MISMATCH");
+    }
 }
 
 int main()
@@ -182,6 +226,7 @@ int main()
 
     checkAutoGain();
     checkPeakLamp();
+    checkUserPresetPersistence();
 
     {
         EmoBoyProcessor proc;

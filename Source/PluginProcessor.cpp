@@ -373,20 +373,72 @@ juce::AudioProcessorEditor* EmoBoyProcessor::createEditor()
     return new EmoBoyEditor (*this);
 }
 
+namespace
+{
+    constexpr const char* kUserPresetsNodeName = "UserPresets";
+    constexpr const char* kUserPresetSlotName = "Slot";
+}
+
 void EmoBoyProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    if (auto state = apvts.copyState(); state.isValid())
+    auto state = apvts.copyState();
+    if (! state.isValid())
+        return;
+
+    // Belt-and-braces: copyState() returns apvts's own tree, which may
+    // already carry a UserPresets child left over from a previous
+    // setStateInformation() call (see below) - drop it before appending a
+    // fresh one so these don't pile up across repeated save/load cycles.
+    state.removeChild (state.getChildWithName (kUserPresetsNodeName), nullptr);
+
+    juce::ValueTree presetsNode (kUserPresetsNodeName);
+    for (const auto& slot : userPresets)
     {
-        if (auto xml = state.createXml())
-            copyXmlToBinary (*xml, destData);
+        juce::ValueTree slotNode (kUserPresetSlotName);
+        slotNode.setProperty ("hasData", slot.hasData, nullptr);
+        slotNode.setProperty ("pitch", slot.pitch, nullptr);
+        slotNode.setProperty ("formant", slot.formant, nullptr);
+        slotNode.setProperty ("drive", slot.drive, nullptr);
+        slotNode.setProperty ("mix", slot.mix, nullptr);
+        slotNode.setProperty ("mode", slot.mode, nullptr);
+        slotNode.setProperty ("robotNoteIndex", slot.robotNoteIndex, nullptr);
+        presetsNode.appendChild (slotNode, nullptr);
     }
+    state.appendChild (presetsNode, nullptr);
+
+    if (auto xml = state.createXml())
+        copyXmlToBinary (*xml, destData);
 }
 
 void EmoBoyProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
-    if (auto xml = getXmlFromBinary (data, sizeInBytes))
-        if (xml->hasTagName (apvts.state.getType()))
-            apvts.replaceState (juce::ValueTree::fromXml (*xml));
+    auto xml = getXmlFromBinary (data, sizeInBytes);
+    if (xml == nullptr || ! xml->hasTagName (apvts.state.getType()))
+        return;
+
+    auto newState = juce::ValueTree::fromXml (*xml);
+
+    if (auto presetsNode = newState.getChildWithName (kUserPresetsNodeName); presetsNode.isValid())
+    {
+        for (int i = 0; i < (int) userPresets.size() && i < presetsNode.getNumChildren(); ++i)
+        {
+            const auto slotNode = presetsNode.getChild (i);
+            auto& slot = userPresets[(size_t) i];
+            slot.hasData = (bool) slotNode.getProperty ("hasData", false);
+            slot.pitch = (float) slotNode.getProperty ("pitch", 0.0f);
+            slot.formant = (float) slotNode.getProperty ("formant", 0.0f);
+            slot.drive = (float) slotNode.getProperty ("drive", 0.0f);
+            slot.mix = (float) slotNode.getProperty ("mix", 100.0f);
+            slot.mode = (int) slotNode.getProperty ("mode", 0);
+            slot.robotNoteIndex = (int) slotNode.getProperty ("robotNoteIndex", 12);
+        }
+        // Keep apvts's own state tree free of our extra node - it isn't a
+        // parameter and there's no reason for APVTS's own bookkeeping to
+        // carry it around.
+        newState.removeChild (presetsNode, nullptr);
+    }
+
+    apvts.replaceState (newState);
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()

@@ -48,6 +48,21 @@ public:
     // "jumps between 0 and 100", the user's own words, not a fade.
     bool isPeakLedOn() const noexcept { return peakLedOn.load (std::memory_order_relaxed); }
 
+    // User-savable preset slots (WRITE + the 4 icon buttons, 2026-08-21).
+    // UI-thread-only (message thread: button clicks, plus
+    // getStateInformation/setStateInformation, which hosts also call from
+    // the message thread in practice) - no audio-thread access, so no
+    // atomics needed here unlike the PEAK lamp above. Persisted as part of
+    // the plugin's own state (see getStateInformation) so they survive a
+    // project reload, like a real WRITE button's memory would.
+    struct UserPresetSlot
+    {
+        bool hasData = false;
+        float pitch = 0.0f, formant = 0.0f, drive = 0.0f, mix = 100.0f;
+        int mode = 0, robotNoteIndex = 12;
+    };
+    std::array<UserPresetSlot, 4> userPresets;
+
     juce::AudioProcessorValueTreeState apvts;
 
 private:

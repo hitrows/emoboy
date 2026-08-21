@@ -137,7 +137,38 @@ namespace
     constexpr int kPresetGlowY = 200, kPresetGlowH = 86;
     constexpr int kPresetGlowX[4] = { 299, 438, 563, 688 };
     constexpr int kPresetGlowW[4] = { 140, 122, 120, 135 }; // button 2 widened slightly (+7px) after the row-composite fix undershot it a touch
+
+    // WRITE (lock icon) + 4 user-savable preset slots (icon row: skull/
+    // heart/star/razor, 2026-08-21). The icon row shares the top row's own
+    // X/width measurements exactly (same physical column positions on the
+    // panel, one row below) - only Y/H differ. Both measured and confirmed
+    // via a combined composite strip (/tmp/emoboy_iconlock_full.png, all
+    // 5 "lit" at once) before use, same methodology as the top row.
+    // 2026-08-21 correction, pass 2: still clipped at the bottom after the
+    // first fix. Re-measured properly this time - a per-row average-alpha
+    // scan of "light transp.png" (not a bounding box, which false-positives
+    // across the whole sheet since every button's glow lives in the same
+    // file) finds the icon row's own glow fades all the way to a clean
+    // alpha=0 band at y=349-369, with the mode row's separate glow only
+    // starting at y=370. Grown to swallow the fade completely; WRITE's own
+    // glow was already fully captured by the pass-1 bounds (true extent
+    // measured as y=224-292, comfortably inside 228-292).
+    constexpr int kIconGlowY = 280, kIconGlowH = 70;
+    constexpr int kWriteGlowX = 845, kWriteGlowY = 228, kWriteGlowW = 120, kWriteGlowH = 64;
+
+    // The 2 small round status lamps left of the preset rows. First tried
+    // as one combined crop (pics/us-fuck.png), then with an added
+    // expand+blur pass the user didn't like - 2026-08-21, they supplied
+    // two separate ready-made files instead (pics/lamp1.png = factory,
+    // lamp2.png = user) and asked for those used completely unprocessed.
+    // Cropped to each file's own exact alpha bounding box, nothing else.
+    constexpr int kPresetLampX = 280, kPresetLampW = 46, kPresetLampH = 47;
+    constexpr int kFactoryLampY = 229, kUserLampY = 290;
     juce::Rectangle<int> presetGlowBounds (int i) { return scaledNativeRect ({ kPresetGlowX[i], kPresetGlowY, kPresetGlowW[i], kPresetGlowH }); }
+    juce::Rectangle<int> userSlotGlowBounds (int i) { return scaledNativeRect ({ kPresetGlowX[i], kIconGlowY, kPresetGlowW[i], kIconGlowH }); }
+    juce::Rectangle<int> writeGlowBounds() { return scaledNativeRect ({ kWriteGlowX, kWriteGlowY, kWriteGlowW, kWriteGlowH }); }
+    juce::Rectangle<int> factoryLampGlowBounds() { return scaledNativeRect ({ kPresetLampX, kFactoryLampY, kPresetLampW, kPresetLampH }); }
+    juce::Rectangle<int> userLampGlowBounds() { return scaledNativeRect ({ kPresetLampX, kUserLampY, kPresetLampW, kPresetLampH }); }
 
     const juce::Colour kKnobTickColour { 190, 120, 150 }; // matches the fader caps' own inlaid stripe tone - user's pick over the brighter branding pink
 }
@@ -326,6 +357,34 @@ EmoBoyEditor::EmoBoyEditor (EmoBoyProcessor& p)
         }
     }
 
+    {
+        writeButton.setGlowImage (juce::ImageCache::getFromMemory (BinaryData::writeglow_png, BinaryData::writeglow_pngSize));
+        addAndMakeVisible (writeButton);
+        writeButton.onClick = [this] { onWriteClicked(); };
+
+        static const struct { const char* data; int size; } userSlotGlowData[4] = {
+            { BinaryData::userslot1glow_png, BinaryData::userslot1glow_pngSize },
+            { BinaryData::userslot2glow_png, BinaryData::userslot2glow_pngSize },
+            { BinaryData::userslot3glow_png, BinaryData::userslot3glow_pngSize },
+            { BinaryData::userslot4glow_png, BinaryData::userslot4glow_pngSize },
+        };
+        for (int i = 0; i < 4; ++i)
+        {
+            auto& button = userPresetButtons[(size_t) i];
+            button.setGlowImage (juce::ImageCache::getFromMemory (userSlotGlowData[i].data, userSlotGlowData[i].size));
+            addAndMakeVisible (button);
+            button.onClick = [this, i] { onUserSlotClicked (i); };
+        }
+    }
+
+    factoryPresetLamp.setGlowImage (juce::ImageCache::getFromMemory (BinaryData::factorypresetlamp_png, BinaryData::factorypresetlamp_pngSize));
+    factoryPresetLamp.setInterceptsMouseClicks (false, false); // status indicator only
+    addAndMakeVisible (factoryPresetLamp);
+
+    userPresetLamp.setGlowImage (juce::ImageCache::getFromMemory (BinaryData::userpresetlamp_png, BinaryData::userpresetlamp_pngSize));
+    userPresetLamp.setInterceptsMouseClicks (false, false);
+    addAndMakeVisible (userPresetLamp);
+
     startTimerHz (30);
 
     const int nativeW = background.getWidth() > 0 ? background.getWidth() : 1074;
@@ -348,6 +407,19 @@ void EmoBoyEditor::timerCallback()
     hitrowsGlow.setLit (! isBypassed);
 
     peakLamp.setLit (proc.isPeakLedOn());
+
+    factoryPresetLamp.setLit (activeFactoryPreset >= 0);
+    if (writeModeArmed)
+    {
+        // ~2.5Hz blink ("choose a destination slot") - wall-clock based so
+        // the period doesn't depend on the timer's own Hz.
+        const bool blinkOn = (juce::Time::getMillisecondCounter() / 200) % 2 == 0;
+        userPresetLamp.setLit (blinkOn);
+    }
+    else
+    {
+        userPresetLamp.setLit (activeUserSlot >= 0);
+    }
 }
 
 void EmoBoyEditor::paint (juce::Graphics& g)
@@ -402,28 +474,92 @@ void EmoBoyEditor::showNotePicker()
         });
 }
 
+void EmoBoyEditor::setParamNormalized (EmoBoyProcessor& p, const juce::String& id, float value)
+{
+    if (auto* param = p.apvts.getParameter (id))
+        param->setValueNotifyingHost (param->convertTo0to1 (value));
+}
+
 void EmoBoyEditor::applyPreset (int index)
 {
     const auto& p = presets[(size_t) index];
 
-    auto setNorm = [this] (const juce::String& id, float actualValue)
-    {
-        if (auto* param = proc.apvts.getParameter (id))
-            param->setValueNotifyingHost (param->convertTo0to1 (actualValue));
-    };
-
-    setNorm (Param::pitch, p.pitch);
-    setNorm (Param::formant, p.formant);
-    setNorm (Param::drive, p.drive);
-    setNorm (Param::mix, p.mix);
-    setNorm (Param::mode, (float) (int) p.mode);
-    setNorm (Param::robotNote, (float) p.robotNoteIndex);
+    setParamNormalized (proc, Param::pitch, p.pitch);
+    setParamNormalized (proc, Param::formant, p.formant);
+    setParamNormalized (proc, Param::drive, p.drive);
+    setParamNormalized (proc, Param::mix, p.mix);
+    setParamNormalized (proc, Param::mode, (float) (int) p.mode);
+    setParamNormalized (proc, Param::robotNote, (float) p.robotNoteIndex);
 
     // "Lit" here just means "most recently clicked" - presets aren't a
     // stored parameter, so there's nothing to poll in timerCallback the
     // way Mode/Bypass are synced. Set directly, once, here.
     for (int i = 0; i < 4; ++i)
         presetButtons[(size_t) i].setLit (i == index);
+
+    // Factory and user-saved presets share one "currently recalled" idea -
+    // picking a factory one clears whichever user slot was lit (2026-08-21,
+    // user's ask after seeing both stay lit at once).
+    activeUserSlot = -1;
+    refreshUserSlotHighlights();
+    activeFactoryPreset = index; // polled by timerCallback for the top status lamp
+}
+
+void EmoBoyEditor::onWriteClicked()
+{
+    writeModeArmed = ! writeModeArmed;
+    writeButton.setLit (writeModeArmed);
+    refreshUserSlotHighlights(); // armed -> all 4 go dark (picking a destination); cancelled -> restore whichever was active
+}
+
+void EmoBoyEditor::onUserSlotClicked (int index)
+{
+    if (writeModeArmed)
+    {
+        auto& slot = proc.userPresets[(size_t) index];
+        slot.hasData = true;
+        slot.pitch = proc.apvts.getRawParameterValue (Param::pitch)->load();
+        slot.formant = proc.apvts.getRawParameterValue (Param::formant)->load();
+        slot.drive = proc.apvts.getRawParameterValue (Param::drive)->load();
+        slot.mix = proc.apvts.getRawParameterValue (Param::mix)->load();
+        slot.mode = (int) proc.apvts.getRawParameterValue (Param::mode)->load();
+        slot.robotNoteIndex = (int) proc.apvts.getRawParameterValue (Param::robotNote)->load();
+
+        writeModeArmed = false;
+        writeButton.setLit (false);
+        activeUserSlot = index;
+        refreshUserSlotHighlights();
+        for (int i = 0; i < 4; ++i)
+            presetButtons[(size_t) i].setLit (false); // saving replaces whichever preset (factory or user) was "current"
+        activeFactoryPreset = -1;
+        return;
+    }
+
+    const auto& slot = proc.userPresets[(size_t) index];
+    if (! slot.hasData)
+        return; // empty slot outside write mode - "кнопка не нажимается", no-op
+
+    setParamNormalized (proc, Param::pitch, slot.pitch);
+    setParamNormalized (proc, Param::formant, slot.formant);
+    setParamNormalized (proc, Param::drive, slot.drive);
+    setParamNormalized (proc, Param::mix, slot.mix);
+    setParamNormalized (proc, Param::mode, (float) slot.mode);
+    setParamNormalized (proc, Param::robotNote, (float) slot.robotNoteIndex);
+
+    activeUserSlot = index;
+    refreshUserSlotHighlights();
+    // Factory and user-saved presets share one "currently recalled" idea -
+    // recalling a user slot clears whichever factory preset was lit
+    // (2026-08-21, user's ask after seeing both stay lit at once).
+    for (int i = 0; i < 4; ++i)
+        presetButtons[(size_t) i].setLit (false);
+    activeFactoryPreset = -1;
+}
+
+void EmoBoyEditor::refreshUserSlotHighlights()
+{
+    for (int i = 0; i < 4; ++i)
+        userPresetButtons[(size_t) i].setLit (! writeModeArmed && i == activeUserSlot);
 }
 
 void EmoBoyEditor::resized()
@@ -445,4 +581,11 @@ void EmoBoyEditor::resized()
 
     for (int i = 0; i < 4; ++i)
         presetButtons[(size_t) i].setBounds (presetGlowBounds (i));
+
+    writeButton.setBounds (writeGlowBounds());
+    for (int i = 0; i < 4; ++i)
+        userPresetButtons[(size_t) i].setBounds (userSlotGlowBounds (i));
+
+    factoryPresetLamp.setBounds (factoryLampGlowBounds());
+    userPresetLamp.setBounds (userLampGlowBounds());
 }

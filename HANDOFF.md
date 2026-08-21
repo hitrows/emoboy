@@ -9,6 +9,70 @@ This was an autonomous session per the brief in
 `~/Downloads/logic-demo-brief-for-claude-code.md` — no check-ins, decisions
 made and documented here for the user to review and correct.
 
+## 2026-08-21: 0.1.17 - WRITE button, 4 user-savable presets, factory/user status lamps
+
+New user-facing feature, not a touch-up: a WRITE (lock icon) button plus 4
+user-savable preset slots on the icon row (skull/heart/star/razor, below the
+4 factory presets), and 2 small round status lamps left of the two rows.
+
+**Behaviour** (per the user's spec, confirmed via clarifying questions
+before starting): click WRITE to arm save mode (lock lights, all 4 icon
+slots go dark while a destination is picked); click one of the 4 icon
+buttons while armed to save the plugin's current full state into that slot
+(lock goes dark, chosen slot lights). Click WRITE again while armed to
+cancel without saving. Outside write mode, clicking a slot with saved data
+recalls it (confirmed: yes, plain click = load); clicking an empty slot
+outside write mode does nothing at all - no parameter change, no highlight
+change. Confirmed: the 4 slots persist across project/plugin reload, not
+just the current session.
+
+**Persistence**: `EmoBoyProcessor::userPresets` (`std::array<UserPresetSlot,
+4>`) is UI-thread-only state, serialized as a "UserPresets" child
+`juce::ValueTree` appended onto the APVTS's own copied state tree in
+`getStateInformation()`, and stripped back out in `setStateInformation()`
+before `apvts.replaceState()` - it isn't a parameter, and there's no reason
+for APVTS's own bookkeeping to carry it around. Round-tripped through a new
+numeric check (`checkUserPresetPersistence()` in `tools/preview.cpp`) that
+saves to two of four slots, serializes, deserializes into a fresh
+processor, and confirms every field matches and the untouched slots stayed
+empty - the exact path a real project save/reload takes, not just "looks
+right in the editor".
+
+**Mutual exclusivity** (added after the user saw both rows able to stay lit
+at once): factory presets (top row) and user presets (icon row) share one
+"currently active preset" idea. Picking one clears the other's highlight -
+`applyPreset()` now also clears `activeUserSlot`/`userPresetButtons`, and
+both branches of `onUserSlotClicked()` (save and recall) clear
+`activeFactoryPreset`/`presetButtons`.
+
+**Status lamps**: 2 small round indicators the user added to the source art
+(`pics/us-fuck.png` as one combined file at first, then split into
+`pics/lamp1.png`/`lamp2.png`) sitting left of the factory/user rows - top
+lamp lit whenever a factory preset is active, bottom lamp lit whenever a
+user slot is, polled in `timerCallback()` off the same
+`activeFactoryPreset`/`activeUserSlot` state as the button highlights.
+While WRITE is armed the bottom lamp blinks (~2.5Hz, wall-clock based via
+`juce::Time::getMillisecondCounter()` so the period doesn't depend on the
+30Hz UI timer) instead of showing recall state, to say "choose a
+destination slot".
+
+**Asset iteration, three passes**: first crop (direct, unprocessed crop
+from `pics/"light transp.png"`-style source) looked clipped on screen;
+re-measured the icon row and WRITE button glow bounds against actual
+per-row alpha-average profiles in the source sheet (not a bounding box,
+which false-positives across the whole sheet since every button's glow
+lives in one file) and found genuine fully-transparent gaps to grow into.
+For the two status lamps specifically: first combined crop looked
+hard-edged: tried adding expand (alpha MaxFilter dilation) + softness
+(premultiplied-alpha Gaussian blur) myself to match the panel's usual bloom
+style - user didn't like the result. They then supplied two separate
+ready-made files (`lamp1.png`/`lamp2.png`) and asked for those used
+completely unprocessed - just cropped to each file's own exact alpha
+bounding box, nothing else. Final call was the user's own art, not mine.
+
+Version bumped to 0.1.17. `auval` passed. Pushed to
+`github.com/hitrows/emoboy`.
+
 ## 2026-08-21: 0.1.16 - preset footswitch glow sizing, final touch-up
 
 Third and (per the user: "1 гениально... 3 и 4 шедеврально") last pass on
