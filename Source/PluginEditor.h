@@ -80,15 +80,6 @@ private:
         void setGlowImage (const juce::Image& glowImage);
         void setLit (bool shouldBeLit);
 
-        // For momentary/hold-style buttons (FREEZE, 2026-08-21: "нажат
-        // пока физически жмешь", not click-to-toggle) - fired on the raw
-        // mouse press/release rather than a completed click, so holding
-        // and dragging off the button still releases correctly. Every
-        // other GlowToggleButton just leaves these unset and keeps using
-        // onClick as before.
-        std::function<void()> onPress;
-        std::function<void()> onRelease;
-
         // Bumped by every setLit() call - lets EmoBoyEditor::blinkButton()
         // detect whether a "real" state change (or a newer blink) landed
         // on this button after one of its own blinks started, and bail
@@ -99,8 +90,6 @@ private:
 
     private:
         void paintButton (juce::Graphics&, bool, bool) override;
-        void mouseDown (const juce::MouseEvent&) override;
-        void mouseUp (const juce::MouseEvent&) override;
         juce::Image glow;
         bool lit = false;
     };
@@ -181,15 +170,6 @@ private:
     GlowToggleButton factoryPresetLamp;
     GlowToggleButton userPresetLamp;
     int activeFactoryPreset = -1; // -1 = none recalled yet this session; mirrors activeUserSlot
-
-    // FREEZE (2026-08-21) - the mic-mute icon button, bottom row, left of
-    // Transpose/Quantize/Robot. Momentary: on only while physically held
-    // down (onPress/onRelease, not onClick - see user's ask), like a
-    // finger on a sustain pedal rather than a click-to-toggle switch.
-    // Still a real parameter (Param::freeze) under the hood, so its
-    // lit state is synced from the parameter in timerCallback the same
-    // way ROBOT/BYPASS are (see bypassButton), not set directly here.
-    GlowToggleButton freezeButton;
 
     static void setParamNormalized (EmoBoyProcessor& p, const juce::String& id, float value);
 

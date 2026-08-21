@@ -9,6 +9,54 @@ This was an autonomous session per the brief in
 `~/Downloads/logic-demo-brief-for-claude-code.md` — no check-ins, decisions
 made and documented here for the user to review and correct.
 
+## 2026-08-21: 0.9.0 - FREEZE removed, new labelled background
+
+Two things, both the user's call:
+
+**FREEZE removed entirely.** Not disabled, not gated - every trace of it is
+gone: `Param::freeze` (Parameters.h/.cpp), the ring-buffer/loop-capture/
+crossfade DSP in `PluginProcessor.h/.cpp`, `freezeButton` and its geometry/
+wiring in `PluginEditor.h/.cpp`, `checkFreeze()`/`checkFreezeTransitionClicks()`
+in `tools/preview.cpp`, and `Resources/freezeglow.png` (deleted, dropped from
+`CMakeLists.txt`). `GlowToggleButton::onPress`/`onRelease` and the
+`mouseDown`/`mouseUp` overrides that only existed to support FREEZE's
+momentary behaviour went with it too - nothing else used them, so keeping
+unused infrastructure around wasn't worth it. `blinkGeneration`/
+`setLitForBlink` (from the earlier self-review fix) stay - those serve row
+3's still-unassigned 4th button and empty user-preset-slot feedback, which
+are unrelated to FREEZE.
+
+**New background, `pics/bg-new.png` -> `Resources/pedalbg.png`.** User's own
+edit of the panel photo: real baked-in text labels (PRESET/USER, PITCH/
+FORMANT/DRIVE/WET, TRANS/QUANT/ROBOT) where there were only blank boxes or
+nothing before, and the mic-mute icon (FREEZE's old button, in the art
+outside the main 4-column grid) removed entirely - matches the code change
+above. Verified before wiring anything (not just taking "all the same" on
+faith): `ImageChops.difference` between old and new backgrounds confirms
+every changed pixel sits inside one bounding box around the label/button
+area, with the fader travel and knob regions bit-for-bit identical (max
+diff 0) - so no existing geometry constant needed re-measuring.
+
+**Build gotcha hit and worth remembering**: after swapping the background
+and removing `freezeglow.png` from the resource list (shifting every
+`BinaryData<N>.cpp` chunk's numbering), an incremental `cmake --build`
+kept producing a plugin that rendered the *old* background - despite the
+regenerated `BinaryData.h`/`.cpp` and even the final linked executable
+provably containing the correct new PNG bytes (checked via `auval`-style
+direct extraction from the binary and an MD5 compare against the source
+file). Root cause never fully pinned down (most likely a stale `.a`
+archive member left over from the chunk renumbering, similar in spirit to
+the `BinaryData22.o` "removed stale file" note the build itself printed),
+but `rm -rf build && cmake -B build -G Xcode` and a full rebuild fixed it
+immediately. **Lesson: after removing/renaming any `juce_add_binary_data`
+source (not just adding one), do a clean rebuild before trusting what's
+on screen** - an incremental build can silently keep serving stale
+embedded resources even when every static check on the binary says the
+new bytes are there.
+
+Version bumped to 0.9.0 (explicit user request, not the usual 0.1.x
+increment). `auval` passed. Pushed to `github.com/hitrows/emoboy`.
+
 ## 2026-08-21: 0.1.20 - self-review pass: FREEZE clicks, blink race, freeze persistence
 
 Asked to review this session's own code for what needed fixing before

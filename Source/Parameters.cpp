@@ -56,9 +56,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
     params.push_back (std::make_unique<AudioParameterBool> (
         ParameterID { Param::bypass, 1 }, "Bypass", false));
 
-    params.push_back (std::make_unique<AudioParameterBool> (
-        ParameterID { Param::freeze, 1 }, "Freeze", false));
-
 #if EMOBOY_NERD_FEATURES
     // ---- modulation sources ------------------------------------------------
     auto addLFO = [&] (const juce::String& rateId, const juce::String& phaseId, const juce::String& levelId, const juce::String& label)

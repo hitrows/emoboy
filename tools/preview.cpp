@@ -219,152 +219,9 @@ namespace
         printf ("[user presets] round-trip through save/load state -> %s\n", ok ? "OK" : "MISMATCH");
     }
 
-    // Confirms FREEZE actually substitutes a looped snapshot for the
-    // engine's input, rather than e.g. just muting or passing live input
-    // through unchanged (2026-08-21). Feeds a real tone with FREEZE off,
-    // engages it, then feeds SILENCE for many loop-lengths - if FREEZE
-    // is doing nothing the output should go silent; if it's working the
-    // output should keep sounding like the tone, repeating every
-    // freezeLoopSamples once things settle past the engine's own analysis
-    // latency. Loop shortened from an initial 500ms to 50ms (2026-08-21 -
-    // 500ms was audible as a repeating phrase, not a held note; see
-    // PluginProcessor.cpp's own comment on freezeLoopSamples).
-    void checkFreeze()
-    {
-        constexpr double sr = 44100.0;
-        constexpr int blockSize = 512;
-        const int loopSamples = (int) (0.05 * sr); // must match PluginProcessor's own freezeLoopSamples
-
-        EmoBoyProcessor proc;
-        proc.prepareToPlay (sr, blockSize);
-        setParam (proc, Param::mix, 100.0f);
-
-        int phaseSamples = 0;
-        auto runBlocks = [&] (int numSamples, bool tone, std::vector<float>* capture)
-        {
-            juce::AudioBuffer<float> block (1, blockSize);
-            juce::MidiBuffer midi;
-            int pos = 0;
-            while (pos < numSamples)
-            {
-                const int bs = juce::jmin (blockSize, numSamples - pos);
-                block.setSize (1, bs, false, false, true);
-                for (int i = 0; i < bs; ++i)
-                    block.setSample (0, i, tone ? 0.3f * std::sin (2.0 * juce::MathConstants<double>::pi * 220.0 * (phaseSamples + i) / sr) : 0.0f);
-                proc.processBlock (block, midi);
-                if (capture != nullptr)
-                    for (int i = 0; i < bs; ++i)
-                        capture->push_back (block.getSample (0, i));
-                pos += bs;
-                phaseSamples += bs;
-            }
-        };
-
-        // Settle the engine on a real tone first (also populates the
-        // freeze ring with real material to snapshot). Needs to be well
-        // past the engine's own 2048-sample analysis window, not just a
-        // couple of these now-tiny 50ms loops.
-        runBlocks (proc.getLatencySamples() * 3, true, nullptr);
-
-        setParam (proc, Param::freeze, 1.0f);
-
-        // Feed silence for many loop-lengths with FREEZE on - capture it
-        // all. With a 50ms loop this is still under a second of audio.
-        std::vector<float> frozenOutput;
-        runBlocks (loopSamples * 40, false, &frozenOutput);
-
-        // Skip the engine's own analysis latency plus several loops so
-        // the (now much shorter) periodic input has time to actually
-        // settle into a steady spectral state, then compare two windows
-        // exactly one loop-length apart (both comfortably inside the
-        // 40-loop capture).
-        const int settle = proc.getLatencySamples() + loopSamples * 10;
-        const int compareLen = loopSamples - 128;
-        double maxDiff = 0.0, sumSq = 0.0;
-        for (int i = 0; i < compareLen; ++i)
-        {
-            const float a = frozenOutput[(size_t) (settle + i)];
-            const float b = frozenOutput[(size_t) (settle + loopSamples + i)];
-            maxDiff = juce::jmax (maxDiff, (double) std::abs (a - b));
-            sumSq += (double) a * a;
-        }
-        const double rms = std::sqrt (sumSq / compareLen);
-        // Not asserting near-zero on the diff: a phase vocoder's running
-        // phase accumulator isn't guaranteed to return to *exactly* the
-        // same state after one loop even when its input is perfectly
-        // periodic, so a small residual is expected. What actually
-        // matters here (and what this checks): the output is clearly NOT
-        // silence while frozen (proving substitution is happening, not
-        // muting) and the two loop-apart windows are close relative to
-        // the signal's own scale (proving it's substantially the same
-        // material repeating, not fresh/unrelated content each cycle).
-        printf ("[freeze] output RMS while frozen=%.4f (not near 0 = substitution is happening), "
-                "one-loop-apart max diff=%.5f (small relative to RMS = same material repeating)\n", rms, maxDiff);
-    }
-
-    // Confirms engaging/releasing FREEZE doesn't click (2026-08-21,
-    // self-review finding: the original implementation substituted the
-    // live<->loop buffers instantly, with no crossfade at the switch
-    // itself - only the loop's own internal seam was smoothed). Compares
-    // the largest sample-to-sample jump in a small window straddling each
-    // transition instant against the largest jump seen during ordinary
-    // steady-state playback of the same tone; an un-crossfaded switch
-    // would show up here as a spike far above the steady-state baseline.
-    void checkFreezeTransitionClicks()
-    {
-        constexpr double sr = 44100.0;
-        constexpr int blockSize = 512;
-        const int loopSamples = (int) (0.05 * sr);
-
-        EmoBoyProcessor proc;
-        proc.prepareToPlay (sr, blockSize);
-        setParam (proc, Param::mix, 100.0f);
-
-        std::vector<float> output;
-        int phaseSamples = 0;
-        auto runBlocks = [&] (int numSamples)
-        {
-            juce::AudioBuffer<float> block (1, blockSize);
-            juce::MidiBuffer midi;
-            int pos = 0;
-            while (pos < numSamples)
-            {
-                const int bs = juce::jmin (blockSize, numSamples - pos);
-                block.setSize (1, bs, false, false, true);
-                for (int i = 0; i < bs; ++i)
-                    block.setSample (0, i, 0.3f * std::sin (2.0 * juce::MathConstants<double>::pi * 220.0 * (phaseSamples + i) / sr));
-                proc.processBlock (block, midi);
-                for (int i = 0; i < bs; ++i)
-                    output.push_back (block.getSample (0, i));
-                pos += bs;
-                phaseSamples += bs;
-            }
-        };
-
-        runBlocks (proc.getLatencySamples() * 3); // settle on live tone first
-        const int engageIndex = (int) output.size();
-        setParam (proc, Param::freeze, 1.0f);
-        runBlocks (loopSamples * 4); // hold frozen a while
-        const int releaseIndex = (int) output.size();
-        setParam (proc, Param::freeze, 0.0f);
-        runBlocks (loopSamples * 4); // back to live
-
-        auto maxJumpIn = [&] (int from, int to)
-        {
-            double m = 0.0;
-            for (int i = juce::jmax (1, from); i < to; ++i)
-                m = juce::jmax (m, (double) std::abs (output[(size_t) i] - output[(size_t) (i - 1)]));
-            return m;
-        };
-
-        const double steadyState = maxJumpIn (256, engageIndex - 256);
-        const double atEngage = maxJumpIn (engageIndex - 32, engageIndex + 32);
-        const double atRelease = maxJumpIn (releaseIndex - 32, releaseIndex + 32);
-
-        printf ("[freeze transitions] steady-state max sample jump=%.5f, at engage=%.5f, at release=%.5f "
-                "(want engage/release not much bigger than steady-state - a click would spike far above it)\n",
-                steadyState, atEngage, atRelease);
-    }
+    // (2026-08-21: FREEZE removed entirely - both numeric checks that used
+    // to live here, checkFreeze() and checkFreezeTransitionClicks(), went
+    // with it.)
 }
 
 int main()
@@ -374,8 +231,6 @@ int main()
     checkAutoGain();
     checkPeakLamp();
     checkUserPresetPersistence();
-    checkFreeze();
-    checkFreezeTransitionClicks();
 
     {
         EmoBoyProcessor proc;

@@ -47,7 +47,6 @@ EmoBoyProcessor::EmoBoyProcessor()
     pDrive = apvts.getRawParameterValue (Param::drive);
     pMix = apvts.getRawParameterValue (Param::mix);
     pBypass = apvts.getRawParameterValue (Param::bypass);
-    pFreeze = apvts.getRawParameterValue (Param::freeze);
 
 #if EMOBOY_NERD_FEATURES
     pMod1Rate = apvts.getRawParameterValue (Param::mod1Rate);
@@ -104,32 +103,6 @@ void EmoBoyProcessor::prepareToPlay (double sampleRate, int /*samplesPerBlock*/)
     dryDelayBuffer.setSize (numChannels, juce::jmax (1, dryDelaySamples));
     dryDelayBuffer.clear();
     dryDelayWritePos = 0;
-
-    // FREEZE: 50ms loop (2026-08-21, shortened from an initial 500ms).
-    // 500ms was long enough to be heard as a distinct repeating phrase,
-    // which then obviously didn't sit "in time" with the track - not
-    // tempo-synced, and not meant to be a stutter/loop effect at all.
-    // What the user actually wanted: hold a note like a finger on a
-    // sustain pedal ("я пою" -> "я поооо"), which wants a period short
-    // enough that repetition reads as one continuous tone, not an audible
-    // loop. 50ms still spans several pitch periods even for a low voice
-    // (~80Hz fundamental = 12.5ms/cycle -> 4 cycles), so the crossfaded
-    // seam has real waveform to blend rather than fighting a near-empty
-    // window, while sitting comfortably under where the ear starts
-    // parsing repeats as separate events.
-    freezeLoopSamples = juce::jmax (1, (int) (0.05 * sampleRate));
-    freezeRing.setSize (numChannels, freezeLoopSamples);
-    freezeRing.clear();
-    freezeRingWritePos = 0;
-    freezeLoop.setSize (numChannels, freezeLoopSamples);
-    freezeLoop.clear();
-    freezeReadPos = 0;
-    freezeWasOn = false;
-    freezeBlend = 0.0f;
-    // ~8ms live<->loop crossfade, expressed as a per-sample step so it
-    // ramps at a fixed rate regardless of block size.
-    const int transitionSamples = juce::jmax (1, (int) (0.008 * sampleRate));
-    freezeTransitionStep = 1.0f / (float) transitionSamples;
 
 #if EMOBOY_NERD_FEATURES
     ptSmoothedSemitones = 0.0f;
@@ -360,89 +333,6 @@ void EmoBoyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
         dryDelayWritePos = (dryDelayWritePos + numSamples) % dryDelaySamples;
     }
 
-    // ---- FREEZE: substitute a looped snapshot for the engine's input ---
-    // Runs after the dry copy above (so the dry side always stays live)
-    // and before the engine call below (so the engine processes whatever
-    // ends up in `buffer` - live or frozen - exactly the same way either
-    // time, no special-casing inside the engine itself).
-    {
-        // Keep the rolling ring current with live input at all times, so
-        // whenever FREEZE gets pressed there's always fresh material to
-        // grab - not something captured stale, or the previous freeze's
-        // own leftovers.
-        for (int c = 0; c < numChannels; ++c)
-        {
-            const auto* liveIn = buffer.getReadPointer (c);
-            auto* ring = freezeRing.getWritePointer (juce::jmin (c, freezeRing.getNumChannels() - 1));
-            int w = freezeRingWritePos;
-            for (int i = 0; i < numSamples; ++i)
-            {
-                ring[w] = liveIn[i];
-                w = (w + 1) % freezeLoopSamples;
-            }
-        }
-        freezeRingWritePos = (freezeRingWritePos + numSamples) % freezeLoopSamples;
-
-        const bool freezeNow = pFreeze->load() > 0.5f;
-        if (freezeNow && ! freezeWasOn)
-        {
-            // Snapshot the ring in chronological order (oldest sample
-            // first - freezeRingWritePos is where the *next* write will
-            // land, i.e. the oldest surviving sample), then crossfade the
-            // last ~20ms into the first ~20ms so the loop point doesn't
-            // click when it wraps.
-            const int fadeLen = juce::jmin (freezeLoopSamples / 4, (int) (0.02 * currentSampleRate));
-            for (int c = 0; c < numChannels; ++c)
-            {
-                const auto* ring = freezeRing.getReadPointer (juce::jmin (c, freezeRing.getNumChannels() - 1));
-                auto* loop = freezeLoop.getWritePointer (juce::jmin (c, freezeLoop.getNumChannels() - 1));
-                for (int i = 0; i < freezeLoopSamples; ++i)
-                    loop[i] = ring[(freezeRingWritePos + i) % freezeLoopSamples];
-                for (int i = 0; i < fadeLen; ++i)
-                {
-                    const float t = (float) i / (float) fadeLen;
-                    const int tailIdx = freezeLoopSamples - fadeLen + i;
-                    loop[tailIdx] = loop[tailIdx] * (1.0f - t) + loop[i] * t;
-                }
-            }
-            freezeReadPos = 0;
-        }
-        freezeWasOn = freezeNow;
-
-        // freezeBlend ramps toward 1 (fully loop) while held, toward 0
-        // (fully live) while released, at most kFreezeTransitionStep per
-        // sample - a short (~8ms) crossfade right at the live<->loop
-        // switch itself, on top of the loop's own internal seam crossfade
-        // above. Without this, engaging/releasing FREEZE was an instant
-        // sample-for-sample substitution between two unrelated waveforms,
-        // which clicks audibly on every press and release - not
-        // acceptable for a momentary/performance control meant to be
-        // pressed rhythmically. A single continuously-updated blend value
-        // (rather than a fixed elapsed-sample countdown) means even a
-        // press/release faster than the crossfade itself just reverses
-        // direction smoothly, with no discontinuity of its own.
-        if (freezeNow || freezeBlend > 0.0f)
-        {
-            const float target = freezeNow ? 1.0f : 0.0f;
-            for (int i = 0; i < numSamples; ++i)
-            {
-                if (freezeBlend < target)
-                    freezeBlend = juce::jmin (target, freezeBlend + freezeTransitionStep);
-                else if (freezeBlend > target)
-                    freezeBlend = juce::jmax (target, freezeBlend - freezeTransitionStep);
-
-                for (int c = 0; c < numChannels; ++c)
-                {
-                    auto* wet = buffer.getWritePointer (c);
-                    const auto* loop = freezeLoop.getReadPointer (juce::jmin (c, freezeLoop.getNumChannels() - 1));
-                    const float live = wet[i];
-                    wet[i] = live * (1.0f - freezeBlend) + loop[freezeReadPos] * freezeBlend;
-                }
-                freezeReadPos = (freezeReadPos + 1) % freezeLoopSamples;
-            }
-        }
-    }
-
     // ---- wet path: pitch/formant engine, then Drive ---------------------
     engine.process (buffer, pitchRatio, formantRatio);
 
@@ -549,15 +439,6 @@ void EmoBoyProcessor::setStateInformation (const void* data, int sizeInBytes)
     }
 
     apvts.replaceState (newState);
-
-    // FREEZE is a momentary/performance control (finger on a pedal), not
-    // a setting - never let a saved "on" survive a reload. Without this,
-    // a project saved mid-gesture (or a host that captures automation at
-    // an inopportune moment) would reopen with the plugin silently stuck
-    // outputting a frozen loop of silence until the user happened to
-    // click the button again.
-    if (auto* freezeParam = apvts.getParameter (Param::freeze))
-        freezeParam->setValueNotifyingHost (0.0f);
 }
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
