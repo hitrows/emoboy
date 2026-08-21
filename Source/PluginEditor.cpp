@@ -136,7 +136,7 @@ namespace
     // overlap between neighbours is actually visible before use.
     constexpr int kPresetGlowY = 200, kPresetGlowH = 86;
     constexpr int kPresetGlowX[4] = { 299, 438, 563, 688 };
-    constexpr int kPresetGlowW[4] = { 140, 115, 120, 135 };
+    constexpr int kPresetGlowW[4] = { 140, 122, 120, 135 }; // button 2 widened slightly (+7px) after the row-composite fix undershot it a touch
     juce::Rectangle<int> presetGlowBounds (int i) { return scaledNativeRect ({ kPresetGlowX[i], kPresetGlowY, kPresetGlowW[i], kPresetGlowH }); }
 
     const juce::Colour kKnobTickColour { 190, 120, 150 }; // matches the fader caps' own inlaid stripe tone - user's pick over the brighter branding pink

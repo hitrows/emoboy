@@ -9,6 +9,25 @@ This was an autonomous session per the brief in
 `~/Downloads/logic-demo-brief-for-claude-code.md` — no check-ins, decisions
 made and documented here for the user to review and correct.
 
+## 2026-08-21: 0.1.16 - preset footswitch glow sizing, final touch-up
+
+Third and (per the user: "1 гениально... 3 и 4 шедеврально") last pass on
+this. 0.1.15 fixed the overlap bleed; live in Logic, button 2 alone still
+looked a touch undersized on its right edge compared to 1/3/4. Widened
+just button 2 by 7px (122 vs 115), re-checked against the same
+whole-row-composited-at-once technique from 0.1.15 to confirm it still
+doesn't reach button 3's territory. 1/3/4 untouched.
+
+Final bounds: 1 = 299-439 (w140), 2 = 438-560 (w122), 3 = 563-683 (w120),
+4 = 688-823 (w135).
+
+Version bumped to 0.1.16. Pushed to `github.com/hitrows/emoboy`. Note:
+0.1.14 as a distinct version was never actually committed - its bounds
+change and the 0.1.15 fix on top of it landed in git as a single 0.1.15
+commit (worth knowing if `git log` is ever cross-referenced against these
+notes and 0.1.14 looks "missing" - it isn't a gap, just never separately
+committed).
+
 ## 2026-08-21: 0.1.15 - preset footswitch glow sizing, take two (right-edge bleed)
 
 0.1.14's fix wasn't quite it. Tested live in Logic, the user reported:
