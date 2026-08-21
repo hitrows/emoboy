@@ -9,6 +9,62 @@ This was an autonomous session per the brief in
 `~/Downloads/logic-demo-brief-for-claude-code.md` — no check-ins, decisions
 made and documented here for the user to review and correct.
 
+## 2026-08-21: 0.1.15 - preset footswitch glow sizing, take two (right-edge bleed)
+
+0.1.14's fix wasn't quite it. Tested live in Logic, the user reported:
+button 4 now perfect, but 1/2/3 each visibly bled into their right-hand
+neighbour's space (1 into 2, 2 into 3, 3 into 4) - not something either of
+us could see in 0.1.14's per-button composite checks, since checking each
+button in isolation can't reveal an overlap with its neighbour.
+
+Cause: 0.1.14 measured the true button frame edges correctly, but then
+padded a uniform ~10px on *both* sides - and the actual gaps between
+buttons in the source art are only ~10-15px wide, so that padding alone
+was enough to reach (or cross) into the next button over.
+
+Fix: pulled back specifically the right edge of buttons 1/2/3 (button 4
+has no right-hand neighbour and was already confirmed correct - left
+untouched). Button 1 reverted to its exact original 0.1.13 bounds
+(299-439) - it was never actually the problem, first flagged as correct
+back in 0.1.13 and only started drifting when 0.1.14 touched it
+unnecessarily. New bounds: 1 = 299-439 (w140, unchanged from 0.1.13),
+2 = 438-553 (w115), 3 = 563-683 (w120), 4 = 688-823 (w135, unchanged).
+
+**Checked differently this time**: composited all four buttons' glow onto
+one continuous strip of `bg-clean.png` simultaneously (all "lit" at once,
+even though only one is ever lit for real) instead of four separate
+isolated crops - that's what actually shows adjacent overlap, which
+isolated per-button checks structurally cannot.
+
+Version bumped to 0.1.15. Pushed to `github.com/hitrows/emoboy`.
+
+## 2026-08-21: 0.1.14 - preset footswitch glow sizing fixed (2/3/4 were oversized)
+
+User caught it by eye: button 1's glow looked right, 2/3/4 didn't. Root
+cause - 0.1.13's crop bounds came from the glow *sprite's own alpha
+bounding box* in `"light transp.png"`, which over-captures because the
+soft blur bleeds into the gaps between buttons. That happened to be a
+small error for button 1 (~15px too wide) but a much bigger one for 2/3/4
+(~45px too wide) - visible as an oversized glow box that didn't sit flush
+against the actual button frame.
+
+Re-measured properly this time: read the *actual button frame edges* in
+`bg-clean.png` directly, via a fine (5px) pixel grid crop per button,
+by eye - not another alpha-threshold pass, since that's exactly what
+produced the wrong numbers the first time. Confirmed something genuinely
+true about the source art in the process: button 1 really is ~10px wider
+(125px) than buttons 2/3/4 (115px each) - not a measurement error to
+"correct away", just how it was drawn. Padded a uniform ~10px around each
+button's true edges and re-checked every one as a composite over
+`bg-clean.png` before touching the code - all four now sit flush.
+
+**Lesson for next time a glow crop looks slightly off**: measure the
+*button frame* in the base art, not the glow sprite's own alpha bounds -
+blur bleed makes the glow's bounding box an unreliable proxy for where the
+button underneath actually is, especially when buttons sit close together.
+
+Version bumped to 0.1.14. Pushed to `github.com/hitrows/emoboy`.
+
 ## 2026-08-21: 0.1.13 - 4 presets on the top-row footswitches, ROBOT button de-duplicated
 
 Two fixes in one:

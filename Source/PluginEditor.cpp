@@ -120,13 +120,23 @@ namespace
     juce::Rectangle<int> lampGlowBounds() { return scaledNativeRect ({ kLampGlowX, kLampGlowY, kLampGlowW, kLampGlowH }); }
 
     // Preset footswitches (top row, "1"/"2"/"3"/"4" - full box-outline
-    // glow, unlike the bottom row's under-glow-only style). Bounds
-    // measured off bg-clean.png directly for the button rects, then
-    // cross-checked visually as a composite over bg-clean.png for the
-    // glow crop before use, same as every other sprite in this file.
+    // glow, unlike the bottom row's under-glow-only style). Went through
+    // two corrections: 0.1.13 used the glow sprite's own alpha bounding
+    // box (over-captured blur bleeding into the gaps - way oversized for
+    // 2/3/4). 0.1.14's first fix measured the actual button frames but
+    // used symmetric ~10px padding on both sides, which was enough to eat
+    // the (only ~10-15px wide) gaps between buttons and made 1/2/3 bleed
+    // into their right-hand neighbour - confirmed by the user testing live
+    // in Logic, not something visible in an isolated per-button composite.
+    // This pass pulls back specifically the *right* edge of 1/2/3 (button
+    // 4 has nothing to its right, and was already correct); button 1
+    // reverted to its original 0.1.13 bounds exactly, which were never
+    // the problem. Checked as one combined composite of the whole row
+    // (all four "lit" at once) rather than four isolated crops, so any
+    // overlap between neighbours is actually visible before use.
     constexpr int kPresetGlowY = 200, kPresetGlowH = 86;
-    constexpr int kPresetGlowX[4] = { 299, 408, 538, 668 };
-    constexpr int kPresetGlowW[4] = { 140, 168, 163, 158 };
+    constexpr int kPresetGlowX[4] = { 299, 438, 563, 688 };
+    constexpr int kPresetGlowW[4] = { 140, 115, 120, 135 };
     juce::Rectangle<int> presetGlowBounds (int i) { return scaledNativeRect ({ kPresetGlowX[i], kPresetGlowY, kPresetGlowW[i], kPresetGlowH }); }
 
     const juce::Colour kKnobTickColour { 190, 120, 150 }; // matches the fader caps' own inlaid stripe tone - user's pick over the brighter branding pink
