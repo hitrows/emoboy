@@ -2,6 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "Parameters.h"
+#include "Presets.h"
 #include "dsp/PitchFormantEngine.h"
 #include "dsp/PitchDetector.h"
 #include "dsp/Drive.h"
@@ -30,11 +31,22 @@ public:
     bool isMidiEffect() const override { return false; }
     double getTailLengthSeconds() const override { return 0.0; }
 
-    int getNumPrograms() override { return 1; }
-    int getCurrentProgram() override { return 0; }
-    void setCurrentProgram (int) override {}
-    const juce::String getProgramName (int) override { return {}; }
+    // Standard host-recognised programs (2026-08-21) - the 9 entries in
+    // Presets.h, so Logic's own preset selector can reach all of them, not
+    // just the first 4 that also have a panel footswitch. setCurrentProgram
+    // applies the preset's parameter values and is the single path both a
+    // host preset-menu pick and a top-row button click go through (see
+    // EmoBoyEditor::applyPreset()) - hasExplicitProgram() tells the editor
+    // whether a program has actually been selected at least once, so a
+    // fresh instance (params still at their own transparent defaults,
+    // matching none of the 9 presets) doesn't show "Cry" highlighted just
+    // because index 0 is JUCE's own default getCurrentProgram().
+    int getNumPrograms() override { return (int) Presets::table.size(); }
+    int getCurrentProgram() override { return currentProgram; }
+    void setCurrentProgram (int index) override;
+    const juce::String getProgramName (int index) override { return Presets::table[(size_t) index].name; }
     void changeProgramName (int, const juce::String&) override {}
+    bool hasExplicitProgram() const noexcept { return programWasExplicitlySet; }
 
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
@@ -129,6 +141,9 @@ private:
     int peakHoldSamples = 0; // set from sample rate in prepareToPlay
 
     double currentSampleRate = 44100.0;
+
+    int currentProgram = 0;
+    bool programWasExplicitlySet = false;
 
     float currentPitchSemitones = 0.0f;   // for metering/UI if ever needed
     float currentFormantSemitones = 0.0f;

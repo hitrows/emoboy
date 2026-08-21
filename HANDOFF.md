@@ -9,6 +9,60 @@ This was an autonomous session per the brief in
 `~/Downloads/logic-demo-brief-for-claude-code.md` — no check-ins, decisions
 made and documented here for the user to review and correct.
 
+## 2026-08-21: 0.9.1 - 9 presets exposed as standard host programs
+
+User asked for non-vocal use-case ideas, then asked to turn the answer into
+5 new presets, on top of the 4 the top row already had - and, separately,
+for all 9 to show up in Logic's own native preset selector, not just as
+panel footswitches (there's only room for 4 buttons; the other 5 needed a
+different way in).
+
+**The 5 new ones** (brainstormed for non-vocal use, not yet validated by ear
+against a real source - see Source/Presets.h for the reasoning behind each):
+Titan (bass - formant down, pitch unchanged), Wraith (foley/creature
+texture), Warp (sample/loop pitch-up without the "chipmunk" - formant
+compensates), Drone (Robot mode as a plain pitch-lock utility, not a vocal
+character), Shatter (Quantize deliberately misapplied to percussion for the
+glitch).
+
+**Architecture**: the preset table moved out of `PluginEditor.cpp` (where it
+only served the 4 buttons) into a new shared `Source/Presets.h` - a plain
+`std::array<EmoBoyPreset, 9>`, included by both `PluginProcessor` and
+`PluginEditor`. `EmoBoyProcessor` now implements the real
+`getNumPrograms()`/`getProgramName()`/`setCurrentProgram()`/
+`getCurrentProgram()` (previously hardcoded to 1 program, no name, no-op
+switch - i.e. AU program support was silently off). `setCurrentProgram()` is
+the *only* place that applies a preset's parameter values now - both a
+top-row footswitch click (`EmoBoyEditor::applyPreset()`) and a pick from
+Logic's own preset menu go through it, so they can never drift out of sync.
+
+**`hasExplicitProgram()`**: JUCE's `AudioProcessor` always reports *some*
+current program index (defaults to 0) even when nothing has actually been
+selected - a fresh instance's parameters sit at their own transparent
+defaults, matching none of the 9 presets. Without gating on this, the top
+row would show "Cry" (program 0) lit on every fresh instance for no reason.
+Added a `programWasExplicitlySet` flag, set the first time
+`setCurrentProgram()` is actually called (by either path above), and the
+editor's polling checks it before lighting anything.
+
+**Editor rework**: `activeFactoryPreset` (separate editor-side tracking
+state) is gone - the top-row highlight and the factory-preset status lamp
+are now polled straight from `proc.getCurrentProgram()`/
+`hasExplicitProgram()` in `timerCallback()`, same pattern as ROBOT/BYPASS.
+This is strictly more correct than before: previously, picking a preset
+from a host's own menu (once one existed) wouldn't have updated the
+footswitch highlight at all, since nothing polled it.
+
+Verified in `tools/preview.cpp` (`checkPresetPrograms()`): program count,
+names in order, `setCurrentProgram()` actually applying real parameter
+values (not just remembering an index), and `hasExplicitProgram()`
+correctly telling a fresh instance apart from an explicit pick. Also
+simplified the existing Cry/Robot preset snapshot tests to call
+`setCurrentProgram()` directly instead of hand-replicating parameter
+values, now that it's public.
+
+Version bumped to 0.9.1. `auval` passed. Pushed to `github.com/hitrows/emoboy`.
+
 ## 2026-08-21: 0.9.0 - FREEZE removed, new labelled background
 
 Two things, both the user's call:

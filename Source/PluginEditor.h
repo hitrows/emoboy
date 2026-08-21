@@ -133,9 +133,6 @@ private:
     std::array<GlowToggleButton, 4> presetButtons;
     void applyPreset (int index);
 
-    struct Preset { float pitch, formant, drive, mix; Param::Mode mode; int robotNoteIndex; };
-    static const std::array<Preset, 4> presets;
-
     // WRITE + 4 user-savable slots (icon row: skull/heart/star/razor,
     // 2026-08-21). Click WRITE to arm save mode (lock lights up, all 4
     // slot highlights clear); click a slot while armed to save the
@@ -167,9 +164,17 @@ private:
     // mutually exclusive, same as the two button rows they sit beside.
     // While WRITE is armed the bottom lamp blinks instead (polled in
     // timerCallback) to say "choose a destination slot".
+    //
+    // "Currently active factory preset" (2026-08-21 rework) is no longer
+    // separate editor-side state - it's proc.getCurrentProgram(), the same
+    // standard host-program index Logic's own preset menu drives, so a
+    // preset picked from Logic's menu highlights the right footswitch too.
+    // proc.hasExplicitProgram() gates it so a fresh instance (params still
+    // at their own transparent defaults, matching none of the 9 presets)
+    // doesn't show program 0 ("Cry") highlighted just because that's
+    // JUCE's own default getCurrentProgram() value.
     GlowToggleButton factoryPresetLamp;
     GlowToggleButton userPresetLamp;
-    int activeFactoryPreset = -1; // -1 = none recalled yet this session; mirrors activeUserSlot
 
     static void setParamNormalized (EmoBoyProcessor& p, const juce::String& id, float value);
 

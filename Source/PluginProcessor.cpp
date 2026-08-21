@@ -373,6 +373,28 @@ juce::AudioProcessorEditor* EmoBoyProcessor::createEditor()
     return new EmoBoyEditor (*this);
 }
 
+void EmoBoyProcessor::setCurrentProgram (int index)
+{
+    if (index < 0 || index >= (int) Presets::table.size())
+        return;
+
+    currentProgram = index;
+    programWasExplicitlySet = true;
+
+    const auto& p = Presets::table[(size_t) index];
+    auto setParam = [this] (const juce::String& id, float value)
+    {
+        if (auto* param = apvts.getParameter (id))
+            param->setValueNotifyingHost (param->convertTo0to1 (value));
+    };
+    setParam (Param::pitch, p.pitch);
+    setParam (Param::formant, p.formant);
+    setParam (Param::drive, p.drive);
+    setParam (Param::mix, p.mix);
+    setParam (Param::mode, (float) (int) p.mode);
+    setParam (Param::robotNote, (float) p.robotNoteIndex);
+}
+
 namespace
 {
     constexpr const char* kUserPresetsNodeName = "UserPresets";

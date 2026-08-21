@@ -219,6 +219,38 @@ namespace
         printf ("[user presets] round-trip through save/load state -> %s\n", ok ? "OK" : "MISMATCH");
     }
 
+    // Confirms the standard host-program machinery (2026-08-21: all 9
+    // Presets.h entries exposed via getNumPrograms()/getProgramName()/
+    // setCurrentProgram(), so Logic's own preset menu can reach the 5 that
+    // don't have a dedicated top-row footswitch too) actually does what it
+    // claims: right count, names in the right order, setCurrentProgram()
+    // applies the real parameter values (not just remembers the index),
+    // and hasExplicitProgram() correctly distinguishes "never touched"
+    // from "program 0 explicitly selected" - a fresh instance defaulting
+    // to reporting program 0 (JUCE's own base-class behaviour) must NOT
+    // look the same as actually having picked "Cry".
+    void checkPresetPrograms()
+    {
+        EmoBoyProcessor proc;
+        proc.prepareToPlay (44100.0, 512);
+
+        bool ok = proc.getNumPrograms() == (int) Presets::table.size();
+        ok &= ! proc.hasExplicitProgram(); // fresh instance - nothing picked yet
+        for (int i = 0; i < proc.getNumPrograms(); ++i)
+            ok &= proc.getProgramName (i) == juce::String (Presets::table[(size_t) i].name);
+
+        proc.setCurrentProgram (6); // "Warp": pitch +7, formant -7, drive 10, mix 100, Transpose
+        ok &= proc.hasExplicitProgram();
+        ok &= proc.getCurrentProgram() == 6;
+        ok &= proc.apvts.getRawParameterValue (Param::pitch)->load() == 7.0f;
+        ok &= proc.apvts.getRawParameterValue (Param::formant)->load() == -7.0f;
+        ok &= proc.apvts.getRawParameterValue (Param::drive)->load() == 10.0f;
+        ok &= (int) proc.apvts.getRawParameterValue (Param::mode)->load() == (int) Param::Mode::Transpose;
+
+        printf ("[presets] %d host programs, names/values/hasExplicitProgram all correct -> %s\n",
+                proc.getNumPrograms(), ok ? "OK" : "MISMATCH");
+    }
+
     // (2026-08-21: FREEZE removed entirely - both numeric checks that used
     // to live here, checkFreeze() and checkFreezeTransitionClicks(), went
     // with it.)
@@ -231,6 +263,7 @@ int main()
     checkAutoGain();
     checkPeakLamp();
     checkUserPresetPersistence();
+    checkPresetPrograms();
 
     {
         EmoBoyProcessor proc;
@@ -261,28 +294,22 @@ int main()
         snapshot (proc, "preview_extremes.png");
     }
 
-    // Preset parameter values (2026-08-20) - EmoBoyEditor::applyPreset()
-    // isn't reachable from here (private, and createEditor() only exposes
-    // the base AudioProcessorEditor*), so this replicates what it sets
-    // via the same public parameter path, to confirm fader positions land
-    // where the presets table in PluginEditor.cpp says they should.
+    // Preset snapshots (2026-08-21: now go through the real
+    // setCurrentProgram() - the same standard host-program path Logic's
+    // own preset menu uses - instead of hand-replicating parameter values,
+    // now that it's a public method. Confirms both that program-switching
+    // actually works and that fader positions land where Presets.h says.
     {
         EmoBoyProcessor proc;
         proc.prepareToPlay (44100.0, 512);
-        setParam (proc, Param::pitch, -3.0f);
-        setParam (proc, Param::formant, -3.0f);
-        setParam (proc, Param::drive, 15.0f);
-        setParam (proc, Param::mix, 100.0f);
+        proc.setCurrentProgram (0); // "Cry"
         snapshot (proc, "preview_preset_cry.png");
     }
 
     {
         EmoBoyProcessor proc;
         proc.prepareToPlay (44100.0, 512);
-        setParam (proc, Param::mode, (float) (int) Param::Mode::Robot);
-        setParam (proc, Param::formant, 2.0f);
-        setParam (proc, Param::drive, 35.0f);
-        setParam (proc, Param::mix, 100.0f);
+        proc.setCurrentProgram (3); // "Robot"
         snapshot (proc, "preview_preset_robot.png");
     }
 

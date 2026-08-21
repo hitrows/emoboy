@@ -179,20 +179,9 @@ namespace
     const juce::Colour kKnobTickColour { 190, 120, 150 }; // matches the fader caps' own inlaid stripe tone - user's pick over the brighter branding pink
 }
 
-// Four presets for the top-row footswitches (2026-08-20, user's ask: "4
-// killer presets"). Named after the panel's own graffiti art (VOID/CRY/
-// LOST are printed on the pedal; ROBOT exercises the mode the pink
-// footswitch/knob are for) even though no name is ever shown in this
-// no-labels build - just for orientation here and in conversation.
-// Not tuned against real vocal material by ear (can't) - a reasonable
-// first pass per character, easy to retune once actually heard.
-const std::array<EmoBoyEditor::Preset, 4> EmoBoyEditor::presets { {
-    // pitch, formant, drive,  mix,   mode,                    robotNoteIndex
-    { -3.0f,  -3.0f,   15.0f, 100.0f, Param::Mode::Transpose,  12 }, // "Cry"   - subtle sad pitch-down double
-    { -12.0f, -9.0f,   65.0f, 100.0f, Param::Mode::Transpose,  12 }, // "Void"  - full octave down, heavy drive, monster voice
-    {  5.0f,   6.0f,   10.0f,  80.0f, Param::Mode::Transpose,  12 }, // "Lost"  - airy pitched-up, mostly wet
-    {  0.0f,   2.0f,   35.0f, 100.0f, Param::Mode::Robot,      12 }, // "Robot" - flattened to middle C, moderate drive
-} };
+// The preset table itself moved to Source/Presets.h (2026-08-21) - shared
+// with EmoBoyProcessor, which now exposes all 9 as standard host-recognised
+// programs. This file just drives the 4 top-row footswitches from it.
 
 EmoBoyEditor::FaderOverlay::FaderOverlay (const juce::Image& capImageIn)
     : cap (capImageIn)
@@ -431,7 +420,21 @@ void EmoBoyEditor::timerCallback()
 
     peakLamp.setLit (proc.isPeakLedOn());
 
-    factoryPresetLamp.setLit (activeFactoryPreset >= 0);
+    // Factory-preset highlight is polled straight from the processor's own
+    // standard program index (2026-08-21 rework) rather than tracked
+    // separately here - this is what makes a preset picked from Logic's
+    // own menu light up the right top-row footswitch too, not just clicks
+    // on the footswitch itself. hasExplicitProgram() keeps a fresh
+    // instance (params at their own defaults, matching none of the 9
+    // presets) from showing program 0 lit just because that's JUCE's own
+    // default getCurrentProgram(). activeUserSlot >= 0 takes priority,
+    // same mutual-exclusivity as before.
+    const bool showFactoryHighlight = activeUserSlot < 0 && proc.hasExplicitProgram();
+    const int currentProgram = proc.getCurrentProgram();
+    for (int i = 0; i < 4; ++i)
+        presetButtons[(size_t) i].setLit (showFactoryHighlight && currentProgram == i);
+    factoryPresetLamp.setLit (showFactoryHighlight);
+
     if (writeModeArmed)
     {
         // ~2.5Hz blink ("choose a destination slot") - wall-clock based so
@@ -505,27 +508,18 @@ void EmoBoyEditor::setParamNormalized (EmoBoyProcessor& p, const juce::String& i
 
 void EmoBoyEditor::applyPreset (int index)
 {
-    const auto& p = presets[(size_t) index];
-
-    setParamNormalized (proc, Param::pitch, p.pitch);
-    setParamNormalized (proc, Param::formant, p.formant);
-    setParamNormalized (proc, Param::drive, p.drive);
-    setParamNormalized (proc, Param::mix, p.mix);
-    setParamNormalized (proc, Param::mode, (float) (int) p.mode);
-    setParamNormalized (proc, Param::robotNote, (float) p.robotNoteIndex);
-
-    // "Lit" here just means "most recently clicked" - presets aren't a
-    // stored parameter, so there's nothing to poll in timerCallback the
-    // way Mode/Bypass are synced. Set directly, once, here.
-    for (int i = 0; i < 4; ++i)
-        presetButtons[(size_t) i].setLit (i == index);
+    // Goes through the processor's standard program-switching path (2026-
+    // 08-21 rework) rather than setting parameters directly here - the
+    // same path a pick from Logic's own preset menu uses, so both stay in
+    // sync. presetButtons' highlight is polled from proc.getCurrentProgram()
+    // in timerCallback, not set directly here.
+    proc.setCurrentProgram (index);
 
     // Factory and user-saved presets share one "currently recalled" idea -
     // picking a factory one clears whichever user slot was lit (2026-08-21,
     // user's ask after seeing both stay lit at once).
     activeUserSlot = -1;
     refreshUserSlotHighlights();
-    activeFactoryPreset = index; // polled by timerCallback for the top status lamp
 }
 
 void EmoBoyEditor::onWriteClicked()
@@ -550,11 +544,8 @@ void EmoBoyEditor::onUserSlotClicked (int index)
 
         writeModeArmed = false;
         writeButton.setLit (false);
-        activeUserSlot = index;
+        activeUserSlot = index; // saving replaces whichever preset (factory or user) was "current" - timerCallback's factory-highlight polling defers to activeUserSlot >= 0
         refreshUserSlotHighlights();
-        for (int i = 0; i < 4; ++i)
-            presetButtons[(size_t) i].setLit (false); // saving replaces whichever preset (factory or user) was "current"
-        activeFactoryPreset = -1;
         return;
     }
 
@@ -574,14 +565,12 @@ void EmoBoyEditor::onUserSlotClicked (int index)
     setParamNormalized (proc, Param::mode, (float) slot.mode);
     setParamNormalized (proc, Param::robotNote, (float) slot.robotNoteIndex);
 
-    activeUserSlot = index;
-    refreshUserSlotHighlights();
     // Factory and user-saved presets share one "currently recalled" idea -
     // recalling a user slot clears whichever factory preset was lit
-    // (2026-08-21, user's ask after seeing both stay lit at once).
-    for (int i = 0; i < 4; ++i)
-        presetButtons[(size_t) i].setLit (false);
-    activeFactoryPreset = -1;
+    // (2026-08-21, user's ask after seeing both stay lit at once) -
+    // timerCallback's factory-highlight polling defers to activeUserSlot >= 0.
+    activeUserSlot = index;
+    refreshUserSlotHighlights();
 }
 
 void EmoBoyEditor::blinkButton (juce::Component::SafePointer<EmoBoyEditor> safeThis, GlowToggleButton& button)
