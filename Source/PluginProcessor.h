@@ -76,6 +76,7 @@ private:
     std::atomic<float>* pDrive = nullptr;
     std::atomic<float>* pMix = nullptr;
     std::atomic<float>* pBypass = nullptr;
+    std::atomic<float>* pFreeze = nullptr;
 
 #if EMOBOY_NERD_FEATURES
     std::atomic<float>* pMod1Rate = nullptr;
@@ -112,6 +113,21 @@ private:
     juce::AudioBuffer<float> dryDelayBuffer;
     int dryDelayWritePos = 0;
     int dryDelaySamples = 0;
+
+    // FREEZE (2026-08-21): captures a short loop of the live wet-path
+    // input the moment the button is pressed, then substitutes that loop
+    // (instead of the live mic) as the engine's input for as long as
+    // FREEZE stays on - the dry path is untouched, so the user can keep
+    // singing live over the frozen texture. freezeRing is a rolling
+    // history of the most recent freezeLoopSamples of live input, always
+    // kept current; freezeLoop is the snapshot actually looped, captured
+    // with a short crossfaded seam so it repeats without a click.
+    juce::AudioBuffer<float> freezeRing;
+    int freezeRingWritePos = 0;
+    juce::AudioBuffer<float> freezeLoop;
+    int freezeLoopSamples = 0;
+    int freezeReadPos = 0;
+    bool freezeWasOn = false;
 
 #if EMOBOY_NERD_FEATURES
     // PT modulation source smoothing state (one-pole, time constant from

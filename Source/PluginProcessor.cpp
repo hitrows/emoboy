@@ -47,6 +47,7 @@ EmoBoyProcessor::EmoBoyProcessor()
     pDrive = apvts.getRawParameterValue (Param::drive);
     pMix = apvts.getRawParameterValue (Param::mix);
     pBypass = apvts.getRawParameterValue (Param::bypass);
+    pFreeze = apvts.getRawParameterValue (Param::freeze);
 
 #if EMOBOY_NERD_FEATURES
     pMod1Rate = apvts.getRawParameterValue (Param::mod1Rate);
@@ -103,6 +104,17 @@ void EmoBoyProcessor::prepareToPlay (double sampleRate, int /*samplesPerBlock*/)
     dryDelayBuffer.setSize (numChannels, juce::jmax (1, dryDelaySamples));
     dryDelayBuffer.clear();
     dryDelayWritePos = 0;
+
+    // FREEZE: 500ms loop, long enough to sound like a sustained texture
+    // rather than an obvious stutter, short enough to stay cheap.
+    freezeLoopSamples = juce::jmax (1, (int) (0.5 * sampleRate));
+    freezeRing.setSize (numChannels, freezeLoopSamples);
+    freezeRing.clear();
+    freezeRingWritePos = 0;
+    freezeLoop.setSize (numChannels, freezeLoopSamples);
+    freezeLoop.clear();
+    freezeReadPos = 0;
+    freezeWasOn = false;
 
 #if EMOBOY_NERD_FEATURES
     ptSmoothedSemitones = 0.0f;
@@ -331,6 +343,72 @@ void EmoBoyProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::Midi
             }
         }
         dryDelayWritePos = (dryDelayWritePos + numSamples) % dryDelaySamples;
+    }
+
+    // ---- FREEZE: substitute a looped snapshot for the engine's input ---
+    // Runs after the dry copy above (so the dry side always stays live)
+    // and before the engine call below (so the engine processes whatever
+    // ends up in `buffer` - live or frozen - exactly the same way either
+    // time, no special-casing inside the engine itself).
+    {
+        // Keep the rolling ring current with live input at all times, so
+        // whenever FREEZE gets pressed there's always fresh material to
+        // grab - not something captured stale, or the previous freeze's
+        // own leftovers.
+        for (int c = 0; c < numChannels; ++c)
+        {
+            const auto* liveIn = buffer.getReadPointer (c);
+            auto* ring = freezeRing.getWritePointer (juce::jmin (c, freezeRing.getNumChannels() - 1));
+            int w = freezeRingWritePos;
+            for (int i = 0; i < numSamples; ++i)
+            {
+                ring[w] = liveIn[i];
+                w = (w + 1) % freezeLoopSamples;
+            }
+        }
+        freezeRingWritePos = (freezeRingWritePos + numSamples) % freezeLoopSamples;
+
+        const bool freezeNow = pFreeze->load() > 0.5f;
+        if (freezeNow && ! freezeWasOn)
+        {
+            // Snapshot the ring in chronological order (oldest sample
+            // first - freezeRingWritePos is where the *next* write will
+            // land, i.e. the oldest surviving sample), then crossfade the
+            // last ~20ms into the first ~20ms so the loop point doesn't
+            // click when it wraps.
+            const int fadeLen = juce::jmin (freezeLoopSamples / 4, (int) (0.02 * currentSampleRate));
+            for (int c = 0; c < numChannels; ++c)
+            {
+                const auto* ring = freezeRing.getReadPointer (juce::jmin (c, freezeRing.getNumChannels() - 1));
+                auto* loop = freezeLoop.getWritePointer (juce::jmin (c, freezeLoop.getNumChannels() - 1));
+                for (int i = 0; i < freezeLoopSamples; ++i)
+                    loop[i] = ring[(freezeRingWritePos + i) % freezeLoopSamples];
+                for (int i = 0; i < fadeLen; ++i)
+                {
+                    const float t = (float) i / (float) fadeLen;
+                    const int tailIdx = freezeLoopSamples - fadeLen + i;
+                    loop[tailIdx] = loop[tailIdx] * (1.0f - t) + loop[i] * t;
+                }
+            }
+            freezeReadPos = 0;
+        }
+        freezeWasOn = freezeNow;
+
+        if (freezeNow)
+        {
+            for (int c = 0; c < numChannels; ++c)
+            {
+                auto* wet = buffer.getWritePointer (c);
+                const auto* loop = freezeLoop.getReadPointer (juce::jmin (c, freezeLoop.getNumChannels() - 1));
+                int r = freezeReadPos;
+                for (int i = 0; i < numSamples; ++i)
+                {
+                    wet[i] = loop[r];
+                    r = (r + 1) % freezeLoopSamples;
+                }
+            }
+            freezeReadPos = (freezeReadPos + numSamples) % freezeLoopSamples;
+        }
     }
 
     // ---- wet path: pitch/formant engine, then Drive ---------------------

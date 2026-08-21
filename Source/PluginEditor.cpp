@@ -112,6 +112,15 @@ namespace
     constexpr int kModeGlowW[3] = { 140, 145, 140 };
     juce::Rectangle<int> modeGlowBounds (int i) { return scaledNativeRect ({ kModeGlowX[i], kModeGlowY, kModeGlowW[i], kModeGlowH }); }
 
+    // FREEZE button - same row as Transpose/Quantize/Robot, one column to
+    // the left (the mic-mute icon baked into the panel art). Own red-toned
+    // glow already exists in "light transp.png"; measured via a per-row
+    // alpha-average scan the same way as the icon row/WRITE fix, confirmed
+    // fully self-contained (fades to a clean 0 before Transpose's own glow
+    // starts, no shared crop needed).
+    constexpr int kFreezeGlowX = 164, kFreezeGlowY = 339, kFreezeGlowW = 132, kFreezeGlowH = 70;
+    juce::Rectangle<int> freezeGlowBounds() { return scaledNativeRect ({ kFreezeGlowX, kFreezeGlowY, kFreezeGlowW, kFreezeGlowH }); }
+
     // PEAK lamp glow bounds, from the user's dedicated pics/lamp.png -
     // alpha bounding box (98,199)-(139,240), cropped with a little padding
     // (85,186)-(152,253) and cross-checked visually before use, same as
@@ -311,6 +320,14 @@ EmoBoyEditor::EmoBoyEditor (EmoBoyProcessor& p)
         bypassParam->setValueNotifyingHost (bypassParam->getValue() > 0.5f ? 0.0f : 1.0f);
     };
 
+    freezeButton.setGlowImage (juce::ImageCache::getFromMemory (BinaryData::freezeglow_png, BinaryData::freezeglow_pngSize));
+    addAndMakeVisible (freezeButton);
+    freezeButton.onClick = [this]
+    {
+        auto* freezeParam = proc.apvts.getParameter (Param::freeze);
+        freezeParam->setValueNotifyingHost (freezeParam->getValue() > 0.5f ? 0.0f : 1.0f);
+    };
+
     hitrowsGlow.setGlowImage (juce::ImageCache::getFromMemory (BinaryData::hitrowsglow_png, BinaryData::hitrowsglow_pngSize));
     hitrowsGlow.setInterceptsMouseClicks (false, false); // status indicator only, not a control
     addAndMakeVisible (hitrowsGlow);
@@ -405,6 +422,8 @@ void EmoBoyEditor::timerCallback()
     const bool isBypassed = proc.apvts.getRawParameterValue (Param::bypass)->load() > 0.5f;
     bypassButton.setLit (isBypassed);
     hitrowsGlow.setLit (! isBypassed);
+
+    freezeButton.setLit (proc.apvts.getRawParameterValue (Param::freeze)->load() > 0.5f);
 
     peakLamp.setLit (proc.isPeakLedOn());
 
@@ -576,6 +595,8 @@ void EmoBoyEditor::resized()
 
     for (int i = 0; i < 3; ++i)
         modeButtons[(size_t) i].setBounds (modeGlowBounds (i));
+
+    freezeButton.setBounds (freezeGlowBounds());
 
     peakLamp.setBounds (lampGlowBounds());
 

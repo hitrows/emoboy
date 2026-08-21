@@ -218,6 +218,83 @@ namespace
 
         printf ("[user presets] round-trip through save/load state -> %s\n", ok ? "OK" : "MISMATCH");
     }
+
+    // Confirms FREEZE actually substitutes a looped snapshot for the
+    // engine's input, rather than e.g. just muting or passing live input
+    // through unchanged (2026-08-21). Feeds a real tone with FREEZE off,
+    // engages it, then feeds SILENCE for a few loop-lengths - if FREEZE
+    // is doing nothing the output should go silent; if it's working the
+    // output should keep sounding like the tone, repeating every
+    // freezeLoopSamples (500ms) once things settle past the engine's own
+    // analysis latency.
+    void checkFreeze()
+    {
+        constexpr double sr = 44100.0;
+        constexpr int blockSize = 512;
+        const int loopSamples = (int) (0.5 * sr); // must match PluginProcessor's own freezeLoopSamples
+
+        EmoBoyProcessor proc;
+        proc.prepareToPlay (sr, blockSize);
+        setParam (proc, Param::mix, 100.0f);
+
+        int phaseSamples = 0;
+        auto runBlocks = [&] (int numSamples, bool tone, std::vector<float>* capture)
+        {
+            juce::AudioBuffer<float> block (1, blockSize);
+            juce::MidiBuffer midi;
+            int pos = 0;
+            while (pos < numSamples)
+            {
+                const int bs = juce::jmin (blockSize, numSamples - pos);
+                block.setSize (1, bs, false, false, true);
+                for (int i = 0; i < bs; ++i)
+                    block.setSample (0, i, tone ? 0.3f * std::sin (2.0 * juce::MathConstants<double>::pi * 220.0 * (phaseSamples + i) / sr) : 0.0f);
+                proc.processBlock (block, midi);
+                if (capture != nullptr)
+                    for (int i = 0; i < bs; ++i)
+                        capture->push_back (block.getSample (0, i));
+                pos += bs;
+                phaseSamples += bs;
+            }
+        };
+
+        // Settle the engine on a real tone first (also populates the
+        // freeze ring with real material to snapshot).
+        runBlocks (loopSamples * 2, true, nullptr);
+
+        setParam (proc, Param::freeze, 1.0f);
+
+        // Feed silence for 4 loop-lengths with FREEZE on - capture it all.
+        std::vector<float> frozenOutput;
+        runBlocks (loopSamples * 4, false, &frozenOutput);
+
+        // Skip the engine's own analysis latency plus one loop so any
+        // startup transient/AutoGain smoothing has settled, then compare
+        // two windows exactly one loop-length apart (both comfortably
+        // inside the 4-loop capture).
+        const int settle = proc.getLatencySamples() + loopSamples;
+        const int compareLen = loopSamples - 4096;
+        double maxDiff = 0.0, sumSq = 0.0;
+        for (int i = 0; i < compareLen; ++i)
+        {
+            const float a = frozenOutput[(size_t) (settle + i)];
+            const float b = frozenOutput[(size_t) (settle + loopSamples + i)];
+            maxDiff = juce::jmax (maxDiff, (double) std::abs (a - b));
+            sumSq += (double) a * a;
+        }
+        const double rms = std::sqrt (sumSq / compareLen);
+        // Not asserting near-zero on the diff: a phase vocoder's running
+        // phase accumulator isn't guaranteed to return to *exactly* the
+        // same state after one loop even when its input is perfectly
+        // periodic, so a small residual is expected. What actually
+        // matters here (and what this checks): the output is clearly NOT
+        // silence while frozen (proving substitution is happening, not
+        // muting) and the two loop-apart windows are close relative to
+        // the signal's own scale (proving it's substantially the same
+        // material repeating, not fresh/unrelated content each cycle).
+        printf ("[freeze] output RMS while frozen=%.4f (not near 0 = substitution is happening), "
+                "one-loop-apart max diff=%.5f (small relative to RMS = same material repeating)\n", rms, maxDiff);
+    }
 }
 
 int main()
@@ -227,6 +304,7 @@ int main()
     checkAutoGain();
     checkPeakLamp();
     checkUserPresetPersistence();
+    checkFreeze();
 
     {
         EmoBoyProcessor proc;

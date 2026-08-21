@@ -155,6 +155,13 @@ private:
     GlowToggleButton userPresetLamp;
     int activeFactoryPreset = -1; // -1 = none recalled yet this session; mirrors activeUserSlot
 
+    // FREEZE (2026-08-21) - the mic-mute icon button, bottom row, left of
+    // Transpose/Quantize/Robot. A real toggle parameter (Param::freeze),
+    // not one-shot UI state like the presets, so it's synced from the
+    // parameter in timerCallback the same way ROBOT/BYPASS are (see
+    // bypassButton), rather than set directly in the click handler.
+    GlowToggleButton freezeButton;
+
     static void setParamNormalized (EmoBoyProcessor& p, const juce::String& id, float value);
 
     // Standard (unstyled) juce::AlertWindow text-entry dialog - user's ask

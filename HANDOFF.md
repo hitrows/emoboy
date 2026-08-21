@@ -9,6 +9,56 @@ This was an autonomous session per the brief in
 `~/Downloads/logic-demo-brief-for-claude-code.md` — no check-ins, decisions
 made and documented here for the user to review and correct.
 
+## 2026-08-21: 0.1.18 - FREEZE button (the mic-mute icon, bottom row)
+
+The mic-mute icon button (bottom row, left of Transpose/Quantize/Robot) had
+baked-in art but no assigned function since it was first noticed. Brainstormed
+options with the user (Input Mute, Noise Gate, Freeze, mute-on-preset-switch,
+Solo Dry); they picked **Freeze**.
+
+**Behaviour**: press it, the plugin captures a 500ms snapshot of whatever's
+currently coming into the wet path and loops it forever, instead of the live
+mic - the dry side of Mix stays live throughout, so singing over the frozen
+texture works. Press again to unfreeze and return to live input.
+
+**Implementation, deliberately outside `PitchFormantEngine`**: rather than
+touch the phase-vocoder's own FFT/phase-accumulation state (fragile, and the
+engine has zero concept of "freeze"), the substitution happens one level up
+in `PluginProcessor::processBlock`, right after the dry copy and right
+before `engine.process()` - `freezeRing` (a rolling 500ms history of live
+input, always kept current) gets snapshotted into `freezeLoop` the instant
+`Param::freeze` flips on, crossfaded ~20ms at the seam so the loop doesn't
+click on wrap, and `buffer` (the wet source about to hit the engine) gets
+overwritten from that loop, sample for sample, for as long as freeze stays
+on. The engine itself never knows the difference - it just sees whatever
+continuous signal `buffer` happens to contain, live or looped.
+
+Checked in `tools/preview.cpp` (`checkFreeze()`): feeds a real tone with
+freeze off, engages it, then feeds *silence* for several loop-lengths -
+confirms the output stays clearly non-silent (proving the substitution is
+real, not a mute) and that two windows exactly one loop-length apart are
+close relative to the signal's own scale (proving it's the same material
+repeating). Didn't assert near-zero on the loop-to-loop diff: a phase
+vocoder's running phase accumulator isn't guaranteed to land on *exactly*
+the same state one loop later even for perfectly periodic input, so a small
+residual is expected and not a bug - final call on how it actually sounds
+is a listening one, not a numeric one.
+
+**Asset**: the mic-mute icon's own red-toned glow already existed in
+`pics/"light transp.png"` (unlike the icon-row/WRITE assets, nobody had to
+draw or process anything new for this one) - measured its bounds with the
+same per-row alpha-average scan used for the 0.1.17 clipping fixes, x=164-296
+y=339-409, confirmed fully self-contained with a clean gap before
+Transpose's own glow starts.
+
+New parameter `Param::freeze` (bool, default off) - synced UI <-> button the
+same manual way as ROBOT/BYPASS (`freezeButton.setLit()` polled in
+`timerCallback()`), not via `ButtonAttachment` - nothing else in this
+codebase uses that pattern, so this doesn't either, for consistency.
+
+Version bumped to 0.1.18. `auval` passed. Pushed to
+`github.com/hitrows/emoboy`.
+
 ## 2026-08-21: 0.1.17 - WRITE button, 4 user-savable presets, factory/user status lamps
 
 New user-facing feature, not a touch-up: a WRITE (lock icon) button plus 4
