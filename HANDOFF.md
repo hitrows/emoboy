@@ -9,6 +9,59 @@ This was an autonomous session per the brief in
 `~/Downloads/logic-demo-brief-for-claude-code.md` — no check-ins, decisions
 made and documented here for the user to review and correct.
 
+## 2026-08-21: 0.1.20 - self-review pass: FREEZE clicks, blink race, freeze persistence
+
+Asked to review this session's own code for what needed fixing before
+release, rather than wait for the user to find it live. Three findings,
+all fixed:
+
+**1. FREEZE clicked on every press/release (`PluginProcessor.cpp`)**. The
+substitution between live and looped audio was instant - correct once
+frozen (the loop's own seam is crossfaded), but the switch itself wasn't:
+sample N was live, sample N+1 was the start of an unrelated captured
+waveform, full stop. For a momentary control meant to be pressed
+rhythmically, that's a click on every single press and release. Fixed with
+`freezeBlend`, a single continuously-updated float (0 = live, 1 = loop)
+that ramps at a fixed per-sample rate (`freezeTransitionStep`, ~8ms full
+traverse) toward whatever FREEZE currently wants, and both live and loop
+signals are simple linear-blended by it. Deliberately *not* a fixed
+elapsed-sample countdown with a separate "which direction" flag - a
+continuous value has no discontinuity to worry about even if FREEZE gets
+tapped faster than the crossfade itself (direction just reverses smoothly
+mid-ramp). Added `checkFreezeTransitionClicks()` to `tools/preview.cpp`:
+compares the largest sample-to-sample jump in a small window straddling
+each transition against the largest jump during ordinary steady playback -
+an un-crossfaded switch shows up as a spike far above baseline; after the
+fix both are the same order of magnitude (~0.0094 vs ~0.0094-0.0098).
+
+**2. `blinkButton()` could clobber a real state change (`PluginEditor.h`/
+`.cpp`)**. The 3-blink feedback (0.1.19) is 6 delayed `setLit()` calls
+spread over 450ms. If a real state change landed on the *same* button
+mid-blink - e.g. click an empty user-preset slot (starts blinking), then
+within that window arm WRITE and save into that exact slot - a stale blink
+step firing afterward would flip the just-saved slot's light back off.
+Fixed with a `blinkGeneration` counter on `GlowToggleButton`: every "real"
+`setLit()` call bumps it; `blinkButton()` captures the current value before
+scheduling and each of its own steps (which use a new `setLitForBlink()`
+that does *not* bump the counter) checks it's still current before
+painting. Same mechanism also fixes rapid-double-click on the same button
+producing two interleaved blink sequences, for free - starting a new blink
+bumps the generation too, silently cancelling whatever blink was already
+in flight.
+
+**3. FREEZE could survive a save/reload stuck "on" (`PluginProcessor.cpp`,
+`setStateInformation`)**. It's a real `AudioParameterBool` under the hood,
+so it serializes like any other parameter. A project saved mid-gesture (or
+host automation capturing an inopportune moment) would reopen with the
+plugin silently outputting a frozen loop of silence until the user happened
+to click the button again - confusing for something that's meant to be a
+momentary/performance control, not a setting. Fixed by forcing
+`Param::freeze` back to 0 at the end of `setStateInformation()`,
+unconditionally, regardless of what was in the saved file.
+
+Version bumped to 0.1.20. `auval` passed. Pushed to
+`github.com/hitrows/emoboy`.
+
 ## 2026-08-21: 0.1.19 - FREEZE tuning (momentary, 50ms), row-3's 4th button, empty-slot feedback
 
 Three follow-ups from the user actually trying FREEZE (0.1.18) live in Logic:

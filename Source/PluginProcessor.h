@@ -129,6 +129,12 @@ private:
     int freezeReadPos = 0;
     bool freezeWasOn = false;
 
+    // 0 = fully live, 1 = fully looped - ramps toward whichever FREEZE
+    // currently wants at freezeTransitionStep per sample, so engaging/
+    // releasing crossfades instead of clicking. See processBlock.
+    float freezeBlend = 0.0f;
+    float freezeTransitionStep = 1.0f;
+
 #if EMOBOY_NERD_FEATURES
     // PT modulation source smoothing state (one-pole, time constant from
     // the PT Smooth parameter).

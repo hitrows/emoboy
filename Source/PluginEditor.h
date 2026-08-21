@@ -89,6 +89,14 @@ private:
         std::function<void()> onPress;
         std::function<void()> onRelease;
 
+        // Bumped by every setLit() call - lets EmoBoyEditor::blinkButton()
+        // detect whether a "real" state change (or a newer blink) landed
+        // on this button after one of its own blinks started, and bail
+        // out of its remaining steps instead of clobbering it. See
+        // blinkButton() and setLitForBlink() below.
+        int blinkGeneration = 0;
+        void setLitForBlink (bool shouldBeLit); // like setLit(), but doesn't bump blinkGeneration - for blinkButton's own steps only
+
     private:
         void paintButton (juce::Graphics&, bool, bool) override;
         void mouseDown (const juce::MouseEvent&) override;

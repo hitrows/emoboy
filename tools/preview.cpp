@@ -301,6 +301,70 @@ namespace
         printf ("[freeze] output RMS while frozen=%.4f (not near 0 = substitution is happening), "
                 "one-loop-apart max diff=%.5f (small relative to RMS = same material repeating)\n", rms, maxDiff);
     }
+
+    // Confirms engaging/releasing FREEZE doesn't click (2026-08-21,
+    // self-review finding: the original implementation substituted the
+    // live<->loop buffers instantly, with no crossfade at the switch
+    // itself - only the loop's own internal seam was smoothed). Compares
+    // the largest sample-to-sample jump in a small window straddling each
+    // transition instant against the largest jump seen during ordinary
+    // steady-state playback of the same tone; an un-crossfaded switch
+    // would show up here as a spike far above the steady-state baseline.
+    void checkFreezeTransitionClicks()
+    {
+        constexpr double sr = 44100.0;
+        constexpr int blockSize = 512;
+        const int loopSamples = (int) (0.05 * sr);
+
+        EmoBoyProcessor proc;
+        proc.prepareToPlay (sr, blockSize);
+        setParam (proc, Param::mix, 100.0f);
+
+        std::vector<float> output;
+        int phaseSamples = 0;
+        auto runBlocks = [&] (int numSamples)
+        {
+            juce::AudioBuffer<float> block (1, blockSize);
+            juce::MidiBuffer midi;
+            int pos = 0;
+            while (pos < numSamples)
+            {
+                const int bs = juce::jmin (blockSize, numSamples - pos);
+                block.setSize (1, bs, false, false, true);
+                for (int i = 0; i < bs; ++i)
+                    block.setSample (0, i, 0.3f * std::sin (2.0 * juce::MathConstants<double>::pi * 220.0 * (phaseSamples + i) / sr));
+                proc.processBlock (block, midi);
+                for (int i = 0; i < bs; ++i)
+                    output.push_back (block.getSample (0, i));
+                pos += bs;
+                phaseSamples += bs;
+            }
+        };
+
+        runBlocks (proc.getLatencySamples() * 3); // settle on live tone first
+        const int engageIndex = (int) output.size();
+        setParam (proc, Param::freeze, 1.0f);
+        runBlocks (loopSamples * 4); // hold frozen a while
+        const int releaseIndex = (int) output.size();
+        setParam (proc, Param::freeze, 0.0f);
+        runBlocks (loopSamples * 4); // back to live
+
+        auto maxJumpIn = [&] (int from, int to)
+        {
+            double m = 0.0;
+            for (int i = juce::jmax (1, from); i < to; ++i)
+                m = juce::jmax (m, (double) std::abs (output[(size_t) i] - output[(size_t) (i - 1)]));
+            return m;
+        };
+
+        const double steadyState = maxJumpIn (256, engageIndex - 256);
+        const double atEngage = maxJumpIn (engageIndex - 32, engageIndex + 32);
+        const double atRelease = maxJumpIn (releaseIndex - 32, releaseIndex + 32);
+
+        printf ("[freeze transitions] steady-state max sample jump=%.5f, at engage=%.5f, at release=%.5f "
+                "(want engage/release not much bigger than steady-state - a click would spike far above it)\n",
+                steadyState, atEngage, atRelease);
+    }
 }
 
 int main()
@@ -311,6 +375,7 @@ int main()
     checkPeakLamp();
     checkUserPresetPersistence();
     checkFreeze();
+    checkFreezeTransitionClicks();
 
     {
         EmoBoyProcessor proc;

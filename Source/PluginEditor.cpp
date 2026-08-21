@@ -272,6 +272,16 @@ void EmoBoyEditor::GlowToggleButton::setGlowImage (const juce::Image& glowImage)
 
 void EmoBoyEditor::GlowToggleButton::setLit (bool shouldBeLit)
 {
+    ++blinkGeneration; // any "real" lit-state change invalidates an in-flight blink on this button
+    if (lit != shouldBeLit)
+    {
+        lit = shouldBeLit;
+        repaint();
+    }
+}
+
+void EmoBoyEditor::GlowToggleButton::setLitForBlink (bool shouldBeLit)
+{
     if (lit != shouldBeLit)
     {
         lit = shouldBeLit;
@@ -621,14 +631,26 @@ void EmoBoyEditor::blinkButton (juce::Component::SafePointer<EmoBoyEditor> safeT
     // state for both current use cases - an unassigned button and an
     // empty preset slot, neither of which has anything to actually stay
     // lit for). SafePointer guards against the editor closing mid-sequence.
+    //
+    // Claiming a fresh blinkGeneration here does double duty (2026-08-21,
+    // fixed after a self-review): it invalidates any earlier blink still
+    // in flight on this same button (rapid double-clicks no longer
+    // interleave into a confused flicker), and every step below re-checks
+    // it before painting - so if a "real" setLit() lands on this button
+    // in between steps (e.g. WRITE saves into this exact slot while its
+    // empty-click blink is still running), the blink notices and quietly
+    // stops instead of clobbering the real state a step later.
+    const int generation = ++button.blinkGeneration;
     constexpr int kStepMs = 90;
     for (int step = 0; step < 6; ++step)
     {
-        juce::Timer::callAfterDelay (kStepMs * step, [safeThis, &button, step]
+        juce::Timer::callAfterDelay (kStepMs * step, [safeThis, &button, step, generation]
         {
             if (safeThis == nullptr)
                 return;
-            button.setLit (step % 2 == 0);
+            if (button.blinkGeneration != generation)
+                return;
+            button.setLitForBlink (step % 2 == 0);
         });
     }
 }
