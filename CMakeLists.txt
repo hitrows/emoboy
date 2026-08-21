@@ -15,7 +15,7 @@ set(PLUGIN_CODE         Emob)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15" CACHE STRING "Minimum macOS version")
 set(CMAKE_OSX_ARCHITECTURES "arm64" CACHE STRING "Build architectures")
 
-project(${PROJECT_NAME} VERSION 0.9.1)
+project(${PROJECT_NAME} VERSION 0.9.2)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -83,6 +83,8 @@ target_sources(${PROJECT_NAME} PRIVATE
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
     Source/Parameters.cpp
+    Source/UpdateChecker.cpp
+    Source/Licence.cpp
     Source/dsp/PitchFormantEngine.cpp)
 
 target_compile_definitions(${PROJECT_NAME} PUBLIC
@@ -131,6 +133,7 @@ target_link_libraries(${PROJECT_NAME}
         EmoBoyAssets
         juce::juce_audio_utils
         juce::juce_dsp
+        juce::juce_cryptography
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
@@ -171,10 +174,13 @@ add_executable (emoboy-preview
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
     Source/Parameters.cpp
+    Source/UpdateChecker.cpp
+    Source/Licence.cpp
     Source/dsp/PitchFormantEngine.cpp)
 
 target_compile_definitions (emoboy-preview PRIVATE
     JucePlugin_Name="EmoBoyPreview"
+    JucePlugin_VersionString="0.0.0"
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     JUCE_MODAL_LOOPS_PERMITTED=1
@@ -185,10 +191,56 @@ target_link_libraries (emoboy-preview PRIVATE
     juce::juce_audio_utils
     juce::juce_gui_basics
     juce::juce_dsp
+    juce::juce_cryptography
     juce::juce_recommended_config_flags
     juce::juce_recommended_warning_flags)
 
 set_target_properties (emoboy-preview PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY         "${CMAKE_BINARY_DIR}/tools"
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG   "${CMAKE_BINARY_DIR}/tools"
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/tools"
+    XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED NO)
+
+# ---------------------------------------------------------------------------
+# make-licence
+#
+# Issues signed licence.txt files and (once) generates the signing key
+# pair. Ported from "Not Sure"'s own tool - see Source/Licence.h and
+# LICENCE-SPEC.md-equivalent reasoning there. Cryptography-only, no plugin
+# code, builds in seconds.
+# ---------------------------------------------------------------------------
+add_executable (make-licence
+    tools/make-licence.cpp
+    Source/Licence.cpp)
+
+target_link_libraries (make-licence PRIVATE
+    juce::juce_core
+    juce::juce_data_structures
+    juce::juce_cryptography)
+
+set_target_properties (make-licence PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY         "${CMAKE_BINARY_DIR}/tools"
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG   "${CMAKE_BINARY_DIR}/tools"
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/tools"
+    XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED NO)
+
+# ---------------------------------------------------------------------------
+# emoboy-licence-test
+#
+# Feeds signLicence/verifyLicence the cases LICENCE-SPEC.md-equivalent
+# acceptance criteria describe, for real, instead of reasoning about it -
+# throwaway keys only, never the real embedded kPublicKey.
+# ---------------------------------------------------------------------------
+add_executable (emoboy-licence-test
+    tools/emoboy-licence-test.cpp
+    Source/Licence.cpp)
+
+target_link_libraries (emoboy-licence-test PRIVATE
+    juce::juce_core
+    juce::juce_data_structures
+    juce::juce_cryptography)
+
+set_target_properties (emoboy-licence-test PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY         "${CMAKE_BINARY_DIR}/tools"
     RUNTIME_OUTPUT_DIRECTORY_DEBUG   "${CMAKE_BINARY_DIR}/tools"
     RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/tools"

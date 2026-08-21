@@ -1,2 +1,8 @@
 build/
 .DS_Store
+
+# Private half of the licensing signing key (Source/Licence.h). It should
+# never be inside this repo at all - it lives at ~/Private/emoboy-signing.key
+# - but this catches it anyway if that ever slips, wherever it ends up.
+emoboy-signing.key
+licence.txt

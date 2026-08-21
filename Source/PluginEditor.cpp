@@ -1,5 +1,6 @@
 #include "PluginEditor.h"
 #include "BinaryData.h"
+#include "UpdateChecker.h"
 
 namespace
 {
@@ -396,6 +397,14 @@ EmoBoyEditor::EmoBoyEditor (EmoBoyProcessor& p)
     userPresetLamp.setGlowImage (juce::ImageCache::getFromMemory (BinaryData::userpresetlamp_png, BinaryData::userpresetlamp_pngSize));
     userPresetLamp.setInterceptsMouseClicks (false, false);
     addAndMakeVisible (userPresetLamp);
+
+    // One shared check per app launch, kicked off on the first editor open
+    // (2026-08-21, ported from "Not Sure") - never in the processor
+    // constructor, so a host scanning plugins at startup makes no network
+    // traffic. Backend only for now: no visual "update available" notice is
+    // wired up yet (user's own call - they'll add that UI later), but the
+    // check/cache/compare logic runs and is ready for one.
+    emoboy::UpdateChecker::getInstance().start (JucePlugin_VersionString);
 
     startTimerHz (30);
 

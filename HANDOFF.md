@@ -9,6 +9,65 @@ This was an autonomous session per the brief in
 `~/Downloads/logic-demo-brief-for-claude-code.md` — no check-ins, decisions
 made and documented here for the user to review and correct.
 
+## 2026-08-21: 0.9.2 - update check + licence system, ported from "Not Sure"
+
+User asked for "the same update-check and licence system as my other
+plugin." Ported both wholesale from the "Not Sure" project (see its own
+UPDATE-CHECK-SPEC.md / LICENCE-SPEC.md for the full design reasoning -
+not duplicated here) rather than reinventing either, since both were
+already fought over in detail there.
+
+**Two decisions asked and answered up front**, since both were real
+blockers, not style choices:
+
+1. **The repo had to go public.** `raw.githubusercontent.com` 404s
+   unauthenticated on a private repo, which would make the manifest fetch
+   permanently, silently fail forever (the checker's own "on any failure,
+   do nothing" rule would just swallow it - no error, no clue why). User's
+   call: made `github.com/hitrows/emoboy` public via `gh repo edit
+   --visibility public`.
+2. **No visual "update available" notice yet.** "Not Sure" draws a
+   pre-rendered overlay (`newver.png`) plus a clickable hotspot over it;
+   EmoBoy has no equivalent artwork or tooltip surface yet, and the user
+   wants to design that themselves later. So: the backend (fetch, cache,
+   version compare) is fully wired and running, but nothing in
+   `EmoBoyEditor` currently reacts to `isUpdateAvailable()` - it's there
+   to build a notice on top of whenever that happens, not proof it works
+   end-to-end visually yet.
+
+**What's identical to "Not Sure"**: `UpdateChecker` (one shared singleton
+across every instance, 24h cache in `~/Library/Application Support/
+Hitrows/EmoBoy/settings.xml`, background-thread fetch with a 5s timeout,
+numeric `major.minor.patch` comparison so `0.10.0 > 0.9.0` correctly,
+started on first editor open - never the processor constructor, so a host
+scanning plugins makes no network traffic) and `Licence` (GOG-style: the
+plugin is fully functional with or without a licence file - no gating, no
+nags - `~/Library/Application Support/Hitrows/EmoBoy/licence.txt`, three
+lines of name/email/RSA-signature, `juce::RSAKey` built into JUCE, reads
+once from the processor constructor since it's a local file not network).
+
+**What's EmoBoy-specific**: a brand new key pair (never reuse a signing
+key across two products - licences are scoped per plugin). Public key
+embedded in `Source/Licence.h`; private half at
+`~/Private/emoboy-signing.key`, same convention as "Not Sure"'s own key,
+never in the repo (`.gitignore` catches it as a second line of defence,
+same as there). Manifest at `github.com/hitrows/emoboy/version.json`
+(not a gist/Pages site) since the repo itself is now public anyway - one
+less thing to host separately. `tools/make-licence` (issues signed
+licence.txt files, `--genkey` generates the pair) and
+`tools/emoboy-licence-test` (throwaway keys only, exercises no-file/
+empty/random-bytes/valid/corrupted-signature/wrong-key/truncated/
+invalid-public-key - all PASS) both ported directly, renamed only.
+
+Verified live, not just by reading the code: with `version.json` not yet
+pushed, `raw.githubusercontent.com` correctly 404s and the checker does
+nothing (no crash, no settings.xml written) - the actual fail-closed path,
+not a simulated one. `auval` passed. `git status` confirms no private key
+or `licence.txt` anywhere in the tree before committing.
+
+Version bumped to 0.9.2. Pushed to `github.com/hitrows/emoboy` (now
+public) - this also finally makes `version.json` resolve for real.
+
 ## 2026-08-21: 0.9.1 - 9 presets exposed as standard host programs
 
 User asked for non-vocal use-case ideas, then asked to turn the answer into

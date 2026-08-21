@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "Licence.h"
 
 namespace
 {
@@ -75,6 +76,12 @@ EmoBoyProcessor::EmoBoyProcessor()
         }
     }
 #endif
+
+    // Reads licence.txt once (2026-08-21, ported from "Not Sure"): a local
+    // file read, not network, so - unlike UpdateChecker - there is no
+    // reason to defer this past the processor constructor. By the time an
+    // editor opens the answer is already cached.
+    emoboy::LicenceChecker::getInstance();
 }
 
 void EmoBoyProcessor::prepareToPlay (double sampleRate, int /*samplesPerBlock*/)
