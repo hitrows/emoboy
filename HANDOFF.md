@@ -9,6 +9,54 @@ This was an autonomous session per the brief in
 `~/Downloads/logic-demo-brief-for-claude-code.md` — no check-ins, decisions
 made and documented here for the user to review and correct.
 
+## 2026-08-21: 0.1.19 - FREEZE tuning (momentary, 50ms), row-3's 4th button, empty-slot feedback
+
+Three follow-ups from the user actually trying FREEZE (0.1.18) live in Logic:
+
+**"не в такт"** - the original 500ms loop was long enough to be heard as a
+distinct repeating phrase, and since it wasn't tempo-synced to the host at
+all, that phrase obviously didn't sit in time with the track. Diagnosed
+correctly but not what the user actually wanted fixed by syncing to BPM -
+see next point, they wanted something shorter instead.
+
+**"я пою" -> "я поооо"**: what FREEZE was actually supposed to feel like is
+a sustain-pedal hold on the current note, not a stutter/loop effect at all.
+Fix: shortened `freezeLoopSamples` from 500ms to 50ms - still several pitch
+periods even for a low voice (~80Hz fundamental = 12.5ms/cycle -> 4 cycles),
+short enough that the ear reads the repetition as one continuous tone
+rather than parsing separate repeats. `tools/preview.cpp`'s `checkFreeze()`
+resized its settle/capture windows to match (a 50ms loop needs a very
+different sample-count budget than 500ms did) - loop-to-loop diff dropped
+from being *larger* than the signal's own RMS at 500ms to about 15% of it
+at 50ms, for whatever a phase vocoder's own periodicity is worth measuring
+this way; the real call is by ear, not this number.
+
+**Momentary, not toggle**: "нажат пока физически жмешь, а не тык-тык" -
+click-to-toggle was the wrong interaction model for a hold effect. Added
+`GlowToggleButton::onPress`/`onRelease` (fired from overridden
+`mouseDown`/`mouseUp`, which keep working correctly even if the drag exits
+the button's bounds while held) alongside the existing `onClick`, and wired
+FREEZE to those instead - `Param::freeze` is set to 1.0 on press, 0.0 on
+release. Every other `GlowToggleButton` is untouched, still click-based.
+
+**Row 3's 4th button**: noticed it existed (own bottom-glow already baked
+into "light transp.png", same style as Transpose/Quantize/Robot, just never
+wired to anything). No function decided yet - for now, clicking it just
+blinks 3 times (`EmoBoyEditor::blinkButton()`, 6 alternating on/off steps
+90ms apart via `juce::Timer::callAfterDelay`, guarded with a
+`Component::SafePointer` in case the editor closes mid-sequence) and
+touches no parameter or other button's state. Placeholder, not a real
+feature - revisit later.
+
+**Empty user-preset slots**: reused the same `blinkButton()` helper -
+clicking a WRITE slot with nothing saved in it outside write mode used to
+be a silent no-op, which reads as "broken" rather than "empty". Now it
+blinks the same way row 3's 4th button does; still zero state change,
+still can't accidentally load garbage into the plugin.
+
+Version bumped to 0.1.19. `auval` passed. Pushed to
+`github.com/hitrows/emoboy`.
+
 ## 2026-08-21: 0.1.18 - FREEZE button (the mic-mute icon, bottom row)
 
 The mic-mute icon button (bottom row, left of Transpose/Quantize/Robot) had

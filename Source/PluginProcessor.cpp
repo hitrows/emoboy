@@ -105,9 +105,19 @@ void EmoBoyProcessor::prepareToPlay (double sampleRate, int /*samplesPerBlock*/)
     dryDelayBuffer.clear();
     dryDelayWritePos = 0;
 
-    // FREEZE: 500ms loop, long enough to sound like a sustained texture
-    // rather than an obvious stutter, short enough to stay cheap.
-    freezeLoopSamples = juce::jmax (1, (int) (0.5 * sampleRate));
+    // FREEZE: 50ms loop (2026-08-21, shortened from an initial 500ms).
+    // 500ms was long enough to be heard as a distinct repeating phrase,
+    // which then obviously didn't sit "in time" with the track - not
+    // tempo-synced, and not meant to be a stutter/loop effect at all.
+    // What the user actually wanted: hold a note like a finger on a
+    // sustain pedal ("я пою" -> "я поооо"), which wants a period short
+    // enough that repetition reads as one continuous tone, not an audible
+    // loop. 50ms still spans several pitch periods even for a low voice
+    // (~80Hz fundamental = 12.5ms/cycle -> 4 cycles), so the crossfaded
+    // seam has real waveform to blend rather than fighting a near-empty
+    // window, while sitting comfortably under where the ear starts
+    // parsing repeats as separate events.
+    freezeLoopSamples = juce::jmax (1, (int) (0.05 * sampleRate));
     freezeRing.setSize (numChannels, freezeLoopSamples);
     freezeRing.clear();
     freezeRingWritePos = 0;

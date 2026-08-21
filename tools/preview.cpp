@@ -222,16 +222,18 @@ namespace
     // Confirms FREEZE actually substitutes a looped snapshot for the
     // engine's input, rather than e.g. just muting or passing live input
     // through unchanged (2026-08-21). Feeds a real tone with FREEZE off,
-    // engages it, then feeds SILENCE for a few loop-lengths - if FREEZE
+    // engages it, then feeds SILENCE for many loop-lengths - if FREEZE
     // is doing nothing the output should go silent; if it's working the
     // output should keep sounding like the tone, repeating every
-    // freezeLoopSamples (500ms) once things settle past the engine's own
-    // analysis latency.
+    // freezeLoopSamples once things settle past the engine's own analysis
+    // latency. Loop shortened from an initial 500ms to 50ms (2026-08-21 -
+    // 500ms was audible as a repeating phrase, not a held note; see
+    // PluginProcessor.cpp's own comment on freezeLoopSamples).
     void checkFreeze()
     {
         constexpr double sr = 44100.0;
         constexpr int blockSize = 512;
-        const int loopSamples = (int) (0.5 * sr); // must match PluginProcessor's own freezeLoopSamples
+        const int loopSamples = (int) (0.05 * sr); // must match PluginProcessor's own freezeLoopSamples
 
         EmoBoyProcessor proc;
         proc.prepareToPlay (sr, blockSize);
@@ -259,21 +261,25 @@ namespace
         };
 
         // Settle the engine on a real tone first (also populates the
-        // freeze ring with real material to snapshot).
-        runBlocks (loopSamples * 2, true, nullptr);
+        // freeze ring with real material to snapshot). Needs to be well
+        // past the engine's own 2048-sample analysis window, not just a
+        // couple of these now-tiny 50ms loops.
+        runBlocks (proc.getLatencySamples() * 3, true, nullptr);
 
         setParam (proc, Param::freeze, 1.0f);
 
-        // Feed silence for 4 loop-lengths with FREEZE on - capture it all.
+        // Feed silence for many loop-lengths with FREEZE on - capture it
+        // all. With a 50ms loop this is still under a second of audio.
         std::vector<float> frozenOutput;
-        runBlocks (loopSamples * 4, false, &frozenOutput);
+        runBlocks (loopSamples * 40, false, &frozenOutput);
 
-        // Skip the engine's own analysis latency plus one loop so any
-        // startup transient/AutoGain smoothing has settled, then compare
-        // two windows exactly one loop-length apart (both comfortably
-        // inside the 4-loop capture).
-        const int settle = proc.getLatencySamples() + loopSamples;
-        const int compareLen = loopSamples - 4096;
+        // Skip the engine's own analysis latency plus several loops so
+        // the (now much shorter) periodic input has time to actually
+        // settle into a steady spectral state, then compare two windows
+        // exactly one loop-length apart (both comfortably inside the
+        // 40-loop capture).
+        const int settle = proc.getLatencySamples() + loopSamples * 10;
+        const int compareLen = loopSamples - 128;
         double maxDiff = 0.0, sumSq = 0.0;
         for (int i = 0; i < compareLen; ++i)
         {

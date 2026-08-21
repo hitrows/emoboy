@@ -121,6 +121,12 @@ namespace
     constexpr int kFreezeGlowX = 164, kFreezeGlowY = 339, kFreezeGlowW = 132, kFreezeGlowH = 70;
     juce::Rectangle<int> freezeGlowBounds() { return scaledNativeRect ({ kFreezeGlowX, kFreezeGlowY, kFreezeGlowW, kFreezeGlowH }); }
 
+    // Row 3's 4th (rightmost) button - unassigned, blink-only for now.
+    // Same row Y/H as the mode buttons; own glow already existed in
+    // "light transp.png" (bottom-glow style, matching its siblings).
+    constexpr int kUnassignedGlowX = 694, kUnassignedGlowW = 114;
+    juce::Rectangle<int> unassignedGlowBounds() { return scaledNativeRect ({ kUnassignedGlowX, kModeGlowY, kUnassignedGlowW, kModeGlowH }); }
+
     // PEAK lamp glow bounds, from the user's dedicated pics/lamp.png -
     // alpha bounding box (98,199)-(139,240), cropped with a little padding
     // (85,186)-(152,253) and cross-checked visually before use, same as
@@ -279,6 +285,20 @@ void EmoBoyEditor::GlowToggleButton::paintButton (juce::Graphics& g, bool, bool)
         g.drawImage (glow, getLocalBounds().toFloat());
 }
 
+void EmoBoyEditor::GlowToggleButton::mouseDown (const juce::MouseEvent& e)
+{
+    juce::Button::mouseDown (e); // keep normal click-detection/visual state working for every other button
+    if (onPress)
+        onPress();
+}
+
+void EmoBoyEditor::GlowToggleButton::mouseUp (const juce::MouseEvent& e)
+{
+    juce::Button::mouseUp (e);
+    if (onRelease)
+        onRelease();
+}
+
 EmoBoyEditor::EmoBoyEditor (EmoBoyProcessor& p)
     : AudioProcessorEditor (&p), proc (p),
       background (juce::ImageCache::getFromMemory (BinaryData::pedalbg_png, BinaryData::pedalbg_pngSize)),
@@ -322,15 +342,30 @@ EmoBoyEditor::EmoBoyEditor (EmoBoyProcessor& p)
 
     freezeButton.setGlowImage (juce::ImageCache::getFromMemory (BinaryData::freezeglow_png, BinaryData::freezeglow_pngSize));
     addAndMakeVisible (freezeButton);
-    freezeButton.onClick = [this]
+    // Momentary, not click-to-toggle (2026-08-21, user's ask): held on
+    // for exactly as long as the mouse button is physically down, like a
+    // finger on a sustain pedal - see GlowToggleButton::onPress/onRelease.
+    freezeButton.onPress = [this]
     {
         auto* freezeParam = proc.apvts.getParameter (Param::freeze);
-        freezeParam->setValueNotifyingHost (freezeParam->getValue() > 0.5f ? 0.0f : 1.0f);
+        freezeParam->setValueNotifyingHost (1.0f);
+    };
+    freezeButton.onRelease = [this]
+    {
+        auto* freezeParam = proc.apvts.getParameter (Param::freeze);
+        freezeParam->setValueNotifyingHost (0.0f);
     };
 
     hitrowsGlow.setGlowImage (juce::ImageCache::getFromMemory (BinaryData::hitrowsglow_png, BinaryData::hitrowsglow_pngSize));
     hitrowsGlow.setInterceptsMouseClicks (false, false); // status indicator only, not a control
     addAndMakeVisible (hitrowsGlow);
+
+    unassignedButton.setGlowImage (juce::ImageCache::getFromMemory (BinaryData::unassignedglow_png, BinaryData::unassignedglow_pngSize));
+    addAndMakeVisible (unassignedButton);
+    unassignedButton.onClick = [this]
+    {
+        blinkButton (juce::Component::SafePointer<EmoBoyEditor> (this), unassignedButton);
+    };
 
     {
         static const struct { const char* data; int size; } modeGlowData[3] = {
@@ -556,7 +591,12 @@ void EmoBoyEditor::onUserSlotClicked (int index)
 
     const auto& slot = proc.userPresets[(size_t) index];
     if (! slot.hasData)
-        return; // empty slot outside write mode - "кнопка не нажимается", no-op
+    {
+        // Empty slot outside write mode - still no parameter/state change,
+        // but blink so the panel doesn't look unresponsive (2026-08-21).
+        blinkButton (juce::Component::SafePointer<EmoBoyEditor> (this), userPresetButtons[(size_t) index]);
+        return;
+    }
 
     setParamNormalized (proc, Param::pitch, slot.pitch);
     setParamNormalized (proc, Param::formant, slot.formant);
@@ -573,6 +613,24 @@ void EmoBoyEditor::onUserSlotClicked (int index)
     for (int i = 0; i < 4; ++i)
         presetButtons[(size_t) i].setLit (false);
     activeFactoryPreset = -1;
+}
+
+void EmoBoyEditor::blinkButton (juce::Component::SafePointer<EmoBoyEditor> safeThis, GlowToggleButton& button)
+{
+    // 3 blinks = 6 alternating on/off steps, ending off (the correct rest
+    // state for both current use cases - an unassigned button and an
+    // empty preset slot, neither of which has anything to actually stay
+    // lit for). SafePointer guards against the editor closing mid-sequence.
+    constexpr int kStepMs = 90;
+    for (int step = 0; step < 6; ++step)
+    {
+        juce::Timer::callAfterDelay (kStepMs * step, [safeThis, &button, step]
+        {
+            if (safeThis == nullptr)
+                return;
+            button.setLit (step % 2 == 0);
+        });
+    }
 }
 
 void EmoBoyEditor::refreshUserSlotHighlights()
@@ -597,6 +655,7 @@ void EmoBoyEditor::resized()
         modeButtons[(size_t) i].setBounds (modeGlowBounds (i));
 
     freezeButton.setBounds (freezeGlowBounds());
+    unassignedButton.setBounds (unassignedGlowBounds());
 
     peakLamp.setBounds (lampGlowBounds());
 
